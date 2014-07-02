@@ -2,3 +2,13 @@
 .cproject
 .project
 .settings
+.pydevproject
+
+# SCons stuff
+.sconf_temp/
+.sconsign.dblite
+config.log
+*.pyc
+
+# Build directory
+test/build

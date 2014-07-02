@@ -1,0 +1,181 @@
+#! /usr/bin/python
+
+##
+# @file
+#  This file is part of XdmfWriter
+#
+# XdmfWriter is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# XdmfWriter is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with XdmfWriter.  If not, see <http://www.gnu.org/licenses/>.
+#
+# @copyright 2014 Technische Universitaet Muenchen
+# @author Sebastian Rettenberger <rettenbs@in.tum.de>
+
+import os
+import sys
+
+#
+# set possible variables
+#
+vars = Variables()
+
+# read parameters from a file if given
+vars.AddVariables(
+  PathVariable( 'buildVariablesFile', 'location of the python file, which contains the build variables', None, PathVariable.PathIsFile )
+)
+env = Environment(variables=vars)
+if 'buildVariablesFile' in env:
+  vars = Variables(env['buildVariablesFile'])
+  
+# PUML specific variables
+vars.AddVariables(
+  PathVariable( 'buildDir', 'where to build the code', 'build', PathVariable.PathIsDirCreate ),
+  
+  EnumVariable( 'compileMode', 'mode of the compilation', 'release',
+                allowed_values=('debug', 'release')
+              ),
+
+  EnumVariable( 'parallelization', 'level of parallelization', 'mpi',
+                allowed_values=('mpi')
+              ),
+
+  EnumVariable( 'logLevel',
+                'logging level. \'debug\' prints all information available, \'info\' prints information at runtime, \'warning\' prints warnings during runtime, \'error\' is most basic and prints errors only',
+                'info',
+                allowed_values=('debug', 'info', 'warning', 'error')
+              )
+)
+
+env.Tool('PrefixPathTool')
+
+# external variables
+vars.AddVariables(
+  env['PREFIX_PATH_VARIABLE'],
+                  
+  PathVariable( 'cc',
+                'C compiler (default: gcc (serial), mpicc (parallel))',
+                None,
+                PathVariable.PathAccept ),
+                  
+  PathVariable( 'cxx',
+                'C++ compiler (default: g++ (serial), mpicxx (parallel))',
+                None,
+                PathVariable.PathAccept ),
+                
+  BoolVariable( 'useEnv',
+                'set variables set in the execution environment',
+                True )
+)
+
+# generate help text
+Help(vars.GenerateHelpText(env))
+if '-h' in sys.argv or '--help' in sys.argv:
+  import SCons
+  print SCons.Script.help_text
+  env.Exit()
+  
+# handle unknown, maybe misspelled variables
+unknownVariables = vars.UnknownVariables()
+
+# remove the buildVariablesFile from the list of unknown variables (used before)
+if 'buildVariablesFile' in unknownVariables:
+  unknownVariables.pop('buildVariablesFile')
+  
+# exit in the case of unknown variables
+if unknownVariables:
+  print "*** The following build variables are unknown: " + str(unknownVariables.keys())
+  env.Exit(1)
+  
+# set environment
+env = Environment(variables=vars)
+
+# Set environment
+if env['useEnv']:
+  env['ENV'] = os.environ
+
+#
+# precompiler, compiler and linker flags
+#
+
+# set compiler
+if 'cc' in env:
+  env['CC'] = env['cxx']
+else:
+  if env['parallelization'] in ['mpi']:
+    env['CC'] = 'mpicc'
+  else:
+    env['CC'] = 'gcc'
+
+if 'cxx' in env:
+  env['CXX'] = env['cxx']
+else:
+  if env['parallelization'] in ['mpi']:
+    env['CXX'] = 'mpicxx'
+  else:
+    env['CXX'] = 'g++'
+
+# add parallel flag for mpi
+if env['parallelization'] in ['mpi']:
+  env.Append(CPPDEFINES=['PARALLEL'])
+
+# set level of logger
+if env['logLevel'] == 'debug':
+  env.Append(CPPDEFINES=['LOG_LEVEL=3'])
+elif env['logLevel'] == 'info':
+  env.Append(CPPDEFINES=['LOG_LEVEL=2'])
+elif env['logLevel'] == 'warning':
+  env.Append(CPPDEFINES=['LOG_LEVEL=1'])
+elif env['logLevel'] == 'error':
+  env.Append(CPPDEFINES=['LOG_LEVEL=0'])
+else:
+  assert(false)
+
+# compiler flags for generated kernels
+env.Append(CXXFLAGS = ['-Wall', '-ansi'])
+if env['compileMode'] == 'debug':
+  env.Append(CXXFLAGS=['-O0','-g'])
+elif env['compileMode'] == 'release':
+  env.Append(CXXFLAGS = ['-DNDEBUG', '-O2'])
+
+# add library folder and submodules to the list of directories
+# which are search for include
+env.Append(CPPPATH=['#/..', '#/../submodules'])
+
+# Add prefix path
+env.Tool('PrefixPathTool')
+
+#
+# add libraries
+#
+# HDF5
+env.Tool('Hdf5Tool', required=True)
+env.Append(CPPDEFINES=['USE_HDF'])
+
+#
+# setup the library name and the build directory
+#
+name = 'xdmfwriter'
+
+# build directory
+env['execFile'] = env['buildDir']+'/'+name
+env['buildDir'] = env['buildDir']+'/build_'+name
+
+# get the source files
+env.sourceFiles = []
+
+Export('env')
+SConscript('src/SConscript', variant_dir='#/'+env['buildDir'], duplicate=0)
+SConscript('../SConscript', variant_dir='#/'+env['buildDir']+'/lib', duplicate=0)
+Import('env')
+
+# build executable version
+env.Program('#/'+env['execFile'], env.sourceFiles+env.XdmfWriterSourceFiles)

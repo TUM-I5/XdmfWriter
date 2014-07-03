@@ -158,7 +158,7 @@ public:
 #endif
 			for (int i = 0; i < m_numProcs-1; i++) {
 				unsigned long spltIndex = (i+1) * (BUCKETS_PER_RANK-1);
-				assert(spltIndex < m_numProcs * (BUCKETS_PER_RANK-1));
+				assert(spltIndex < static_cast<unsigned int>(m_numProcs * (BUCKETS_PER_RANK-1)));
 
 				splitters[i] = allSplitters[spltIndex];
 			}

@@ -45,7 +45,7 @@
 /**
  * Writes data in XDMF format
  */
-class XDMFWriter
+class XdmfWriter
 {
 private:
 	int m_rank;
@@ -85,7 +85,7 @@ private:
 	unsigned int m_timestep;
 
 public:
-	XDMFWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames)
+	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames)
 		: m_rank(rank), m_outputPrefix(outputPrefix), m_variableNames(variableNames),
 		  m_totalCells(0), m_localCells(0), m_offsetCells(0), m_timeDimPos(0L), m_timestep(0)
 	{
@@ -113,7 +113,7 @@ public:
 #endif // USE_HDF
 	}
 
-	virtual ~XDMFWriter()
+	virtual ~XdmfWriter()
 	{
 		delete [] m_timeDimPos;
 #ifdef USE_HDF

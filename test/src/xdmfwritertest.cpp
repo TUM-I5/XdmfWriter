@@ -26,10 +26,8 @@
 
 #include <cstdlib>
 
-//#define NUM_CELLS 100000000
-//#define NUM_VERTICES 20000000
-#define NUM_CELLS 100000
-#define NUM_VERTICES 20000
+#define NUM_CELLS 1000
+#define NUM_VERTICES 200
 
 static int rand_max(int max)
 {

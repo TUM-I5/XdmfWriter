@@ -45,13 +45,18 @@ vars.AddVariables(
               ),
 
   EnumVariable( 'parallelization', 'level of parallelization', 'mpi',
-                allowed_values=('mpi')
+                allowed_values=('mpi',)
               ),
 
   EnumVariable( 'logLevel',
                 'logging level. \'debug\' prints all information available, \'info\' prints information at runtime, \'warning\' prints warnings during runtime, \'error\' is most basic and prints errors only',
                 'info',
                 allowed_values=('debug', 'info', 'warning', 'error')
+              ),
+
+  BoolVariable( 'scalasca',
+                'instruments code with scalasca',
+                False
               )
 )
 
@@ -108,7 +113,7 @@ if env['useEnv']:
 
 # set compiler
 if 'cc' in env:
-  env['CC'] = env['cxx']
+  env['CC'] = env['cc']
 else:
   if env['parallelization'] in ['mpi']:
     env['CC'] = 'mpicc'
@@ -122,6 +127,11 @@ else:
     env['CXX'] = 'mpicxx'
   else:
     env['CXX'] = 'g++'
+
+# instrument code with scalasca
+if env['scalasca']:
+  for mode in ['CC', 'CXX']:
+    env[mode] = 'scalasca -instrument -comp=none -user -mode=MPI ' + env[mode]
 
 # add parallel flag for mpi
 if env['parallelization'] in ['mpi']:

@@ -44,7 +44,8 @@ def generate(env, *kw):
         
         # Append include/lib and add them to the list if they exist
         incPathes = [p for p in map(lambda p: os.path.join(p, 'include'), env['prefixPath']) if os.path.exists(p)]
-        libPathes = [p for p in map(lambda p: os.path.join(p, 'lib'), env['prefixPath']) if os.path.exists(p)]
+        libPathes = [p for p in map(lambda p: os.path.join(p, 'lib64'), env['prefixPath']) if os.path.exists(p)] \
+                  + [p for p in map(lambda p: os.path.join(p, 'lib'), env['prefixPath']) if os.path.exists(p)]
                     
         env.AppendUnique(CPPPATH=incPathes)
         env.AppendUnique(LIBPATH=libPathes)

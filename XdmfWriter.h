@@ -35,6 +35,7 @@
 #include <hdf5.h>
 #endif // USE_HDF
 
+#include "utils/env.h"
 #include "utils/logger.h"
 
 #include "epik_wrapper.h"
@@ -221,7 +222,12 @@ public:
 		// Create variable datasets
 		m_hdfVars = new hid_t[m_variableNames.size()];
 
-		hsize_t varChunkDims[2] = {1, totalSize[0]};
+		hsize_t varChunkDims[2] = {
+				utils::Env::get<hsize_t>("XDMFWRITER_TIME_CHUNK_SIZE", 1),
+				utils::Env::get<hsize_t>("XDMFWRITER_ELEMENT_CHUNK_SIZE", 0)};
+		if (varChunkDims[1] == 0)
+			// 0 elements -> all elements
+			varChunkDims[1] = totalSize[0];
 		hid_t h5pCreate = H5Pcreate(H5P_DATASET_CREATE);
 		H5Pset_chunk(h5pCreate, 2, varChunkDims);
 

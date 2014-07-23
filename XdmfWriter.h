@@ -168,18 +168,15 @@ public:
 		std::string hdfName = m_outputPrefix + ".h5";
 
 		// Create the file
-#ifdef PARALLEL
 		hid_t h5plist = H5Pcreate(H5P_FILE_ACCESS);
+		H5Pset_alignment(h5plist, 0, utils::Env::get<hsize_t>("XDMFWRITER_ALIGNMENT", 1));
+#ifdef PARALLEL
 		H5Pset_fapl_mpio(h5plist, MPI_COMM_WORLD, MPI_INFO_NULL);
-#else // PARALLEL
-		hid_t h5plist = H5P_DEFAULT;
 #endif // PARALLEL
 
 		m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
 
-#ifdef PARALLEL
 		H5Pclose(h5plist);
-#endif // PARALLEL
 #endif // USE_HDF
 
 #ifdef PARALLEL

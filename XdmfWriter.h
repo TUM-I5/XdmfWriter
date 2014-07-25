@@ -173,6 +173,8 @@ public:
 
 		// Create the file
 		hid_t h5plist = H5Pcreate(H5P_FILE_ACCESS);
+		H5Pset_libver_bounds(h5plist, H5F_LIBVER_LATEST, H5F_LIBVER_LATEST);
+		H5Pset_meta_block_size(h5plist, 1024*1024);
 		H5Pset_alignment(h5plist, 1, utils::Env::get<hsize_t>("XDMFWRITER_ALIGNMENT", 1));
 #ifdef PARALLEL
 		H5Pset_fapl_mpio(h5plist, MPI_COMM_WORLD, MPI_INFO_NULL);

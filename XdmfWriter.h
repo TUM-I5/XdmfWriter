@@ -82,13 +82,17 @@ private:
 	/** Offsets in the XDMF file which describe the time dimension size */
 	size_t *m_timeDimPos;
 
+	/** Only execute the flush on certain time steps */
+	unsigned int m_flushInterval;
+
 	/** Output step counter */
 	unsigned int m_timestep;
 
 public:
 	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames)
 		: m_rank(rank), m_outputPrefix(outputPrefix), m_variableNames(variableNames),
-		  m_totalCells(0), m_localCells(0), m_offsetCells(0), m_timeDimPos(0L), m_timestep(0)
+		  m_totalCells(0), m_localCells(0), m_offsetCells(0), m_timeDimPos(0L), m_flushInterval(0),
+		  m_timestep(0)
 	{
 		std::string prefix(outputPrefix);
 
@@ -314,6 +318,9 @@ public:
 		m_totalCells = totalSize[0];
 		m_localCells = numCells;
 		m_offsetCells = offsets[0];
+
+		// Get flush interval
+		m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
 	}
 
 	/**
@@ -402,7 +409,8 @@ public:
 		EPIK_TRACER("XDMFWriter_flush");
 
 #ifdef USE_HDF
-		herr_t status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
+		if (m_timestep % m_flushInterval == 0)
+			herr_t status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
 #endif // USE_HDF
 	}
 

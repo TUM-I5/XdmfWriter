@@ -47,6 +47,11 @@ vars.AddVariables(
   EnumVariable( 'parallelization', 'level of parallelization', 'mpi',
                 allowed_values=('mpi',)
               ),
+                  
+  
+  BoolVariable( 'unitTests', 'builds additional unit tests',
+                False
+              ),
 
   EnumVariable( 'logLevel',
                 'logging level. \'debug\' prints all information available, \'info\' prints information at runtime, \'warning\' prints warnings during runtime, \'error\' is most basic and prints errors only',
@@ -189,3 +194,37 @@ Import('env')
 
 # build executable version
 env.Program('#/'+env['execFile'], env.sourceFiles+env.XdmfWriterSourceFiles)
+
+# build unit tests
+if env['unitTests']:
+    # Use our own env for testing
+    env = env.Clone()
+
+    # Some MPI version requires this flag
+    if env['parallelization'] == 'mpi':
+        env.Append(CPPDEFINES=['MPICH_IGNORE_CXX_SEEK'])
+
+    # define location of cxxtest
+    env['CXXTEST'] = '#/../submodules/cxxtest'
+  
+    # Parallel tests?
+    if env['parallelization'] in ['mpi']:
+        env['CXXTEST_COMMAND'] = 'mpiexec -np 3 %t'
+        env['CXXTEST_OPTS'] = ['--main=cxxtest_main']
+  
+    # add cxxtest-tool
+    env.Tool('cxxtest', toolpath=[env['CXXTEST']+'/build_tools/SCons'])
+    
+    # Append CxxTest to CPPPATH (since we have some normal .cpp files included)
+    env.Append(CPPPATH=env['CXXTEST_CPPPATH'])
+    
+    # Get test source files
+    env.testSourceFiles = []
+  
+    Export('env')
+    SConscript('unittests/SConscript', variant_dir='#/'+env['buildDir']+'/unittests')
+    Import('env')
+
+    # build unit tests
+    env.CxxTest(target='#/'+env['buildDir']+'/unittests/cxxtest_runner',
+                source=env.XdmfWriterSourceFiles+env.testSourceFiles)

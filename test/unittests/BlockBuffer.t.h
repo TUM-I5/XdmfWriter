@@ -74,5 +74,16 @@ public:
 		for (unsigned int i = 0; i < m_blockBuffer1.count(); i++)
 			TS_ASSERT_EQUALS(out[i], i);
 
+		// Test advanced exchange
+		offset[1] = 20; offset[2] = 60;
+		short data2[60];
+		for (int i = 0; i < (m_rank+1)*20; i++)
+			data2[i] = i + offset[m_rank];
+
+		short out2[56];
+		m_blockBuffer0.exchange(data2, MPI_SHORT, 2, out2);
+		offset[1] = 32; offset[2] = 64;
+		for (unsigned int i = 0; i < m_blockBuffer0.count()*2; i++)
+			TS_ASSERT_EQUALS(out2[i], offset[m_rank]+i);
 	}
 };

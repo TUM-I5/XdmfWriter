@@ -175,27 +175,54 @@ public:
 	 */
 	void exchange(void* in, void* out)
 	{
+		_exchange(in, m_type, m_extent, 1, out);
+	}
+
+	/**
+	 * Does the same as <code>exchange(void*, void*)</code> but creates block of
+	 * a continues type <code>type</code> with <code>count</code> elements.
+	 * The resulting block have the size type * count / orig_type * orig_block_size.
+	 */
+	void exchange(void* in, MPI_Datatype type, unsigned int count, void* out)
+	{
+		MPI_Aint lb;
+		MPI_Aint extent;
+		MPI_Type_get_extent(type, &lb, &extent);
+
+		_exchange(in, type, extent, count, out);
+	}
+
+private:
+	/**
+	 * @param extent Extent of a single element
+	 * @param count Number of elements
+	 */
+	void _exchange(void* in, MPI_Datatype type, MPI_Aint extent, unsigned int count, void* out)
+	{
+		extent *= count;
+
 		// Recv elements
 		unsigned int elemOffset = m_inCount-m_sendCount;
 		for (unsigned int i = 0; i < m_recvRanks; i++) {
 			if (m_recvCounts[i] > 0) {
-				MPI_Irecv(static_cast<uint8_t*>(out)+elemOffset*m_extent,
-						m_recvCounts[i], m_type, m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
+				MPI_Irecv(static_cast<uint8_t*>(out)+elemOffset*extent,
+						m_recvCounts[i]*count, type, m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
 				elemOffset += m_recvCounts[i];
 			}
 		}
 
 		// Send first elements
 		if (m_sendCount > 0)
-			MPI_Isend(in, m_sendCount, m_type, m_sendRank, 0,
+			MPI_Isend(in, m_sendCount*count, type, m_sendRank, 0,
 					MPI_COMM_WORLD, &m_requests[0]);
 
 		// Copy local elements
-		memcpy(out, static_cast<uint8_t*>(in)+m_sendCount*m_extent,
-				(m_inCount-m_sendCount)*m_extent);
+		memcpy(out, static_cast<uint8_t*>(in)+m_sendCount*extent,
+				(m_inCount-m_sendCount)*extent);
 
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
 	}
+
 };
 
 #endif // BLOCK_BUFFER_H

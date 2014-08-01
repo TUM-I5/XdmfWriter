@@ -86,4 +86,28 @@ public:
 		for (unsigned int i = 0; i < m_blockBuffer0.count()*2; i++)
 			TS_ASSERT_EQUALS(out2[i], offset[m_rank]+i);
 	}
+
+	void testExchangeAny()
+	{
+		// First test
+		float data[10];
+		for (unsigned int i = 0; i < 10; i++)
+			data[i] = i+m_rank*10;
+
+		unsigned int count;
+		float *out = m_blockBuffer0.exchangeAny(data, MPI_FLOAT, 2, 5, count);
+		TS_ASSERT_EQUALS(count, 5);
+		for (unsigned int i = 0; i < 10; i++)
+			TS_ASSERT_EQUALS(out[i], i+m_rank*10);
+		BlockBuffer::free(out);
+
+		// Second test
+		out = m_blockBuffer1.exchangeAny(data, MPI_FLOAT, 2, 5, count);
+		TS_ASSERT_EQUALS(count, (m_rank == 0 ? 15 : 0));
+		if (m_rank == 0) {
+			for (unsigned int i = 0; i < 30; i++)
+				TS_ASSERT_EQUALS(out[i], i);
+		}
+		BlockBuffer::free(out);
+	}
 };

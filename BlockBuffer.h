@@ -192,6 +192,73 @@ public:
 		_exchange(in, type, extent, count, out);
 	}
 
+	/**
+	 * Exchanges any number of elements but does not garantie a specific block size. Makes
+	 * sure that only processes with <code>count() > 0</code> get elements.
+	 *
+	 * @param count Number of variables of type <code>type</code> for one element
+	 * @param elemIn Number of elements on this processes
+	 * @param[out] elemOut Number of elements this processes has after the exchange
+	 * @return Buffer the elements after the exchange. Use <code>free()</code>
+	 *  to free the memory
+	 */
+	template<typename T>
+	T* exchangeAny(T* in, MPI_Datatype type, unsigned int count,
+			unsigned int elemIn, unsigned int &elemOut)
+	{
+		MPI_Aint lb;
+		MPI_Aint extent;
+		MPI_Type_get_extent(type, &lb, &extent);
+
+		extent *= count;
+
+		// Recv size
+		unsigned int *recvCounts = new unsigned int[m_recvRanks];
+		memset(recvCounts, 0, m_recvRanks*sizeof(unsigned int));
+		for (unsigned int i = 0; i < m_recvRanks; i++) {
+			if (m_recvCounts[i] > 0)
+				MPI_Irecv(&recvCounts[i], 1, MPI_UNSIGNED, m_rank+i+1, 0,
+						MPI_COMM_WORLD, &m_requests[i+1]);
+		}
+
+		// Send size
+		unsigned int sendCount = (m_outCount > 0 ? 0 : elemIn); // Send elements if we don't own any
+		if (m_sendCount > 0)
+			MPI_Isend(&sendCount, 1, MPI_UNSIGNED, m_sendRank, 0, MPI_COMM_WORLD, &m_requests[0]);
+
+		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
+
+		// How many elements are we responsible for?
+		elemOut = elemIn - sendCount;
+		for (unsigned int i = 0; i < m_recvRanks; i++)
+			elemOut += recvCounts[i];
+
+		uint8_t *buf = 0L;
+		if (elemOut > 0)
+			buf = new uint8_t[elemOut * extent];
+
+		// Recv elements
+		unsigned int elemOffset = elemIn;
+		for (unsigned int i = 0; i < m_recvRanks; i++) {
+			if (recvCounts[i] > 0) {
+				MPI_Irecv(buf+elemOffset*extent, recvCounts[i]*count, type,
+						m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
+				elemOffset += m_recvCounts[i];
+			}
+		}
+
+		// Send elements or copy
+		if (sendCount > 0)
+			MPI_Isend(in, sendCount*count, type, m_sendRank, 0,
+					MPI_COMM_WORLD, &m_requests[0]);
+		else
+			memcpy(buf, in, elemIn*extent);
+
+		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
+
+		return reinterpret_cast<T*>(buf);
+	}
+
 private:
 	/**
 	 * @param extent Extent of a single element
@@ -221,6 +288,12 @@ private:
 				(m_inCount-m_sendCount)*extent);
 
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
+	}
+
+public:
+	static void free(void *buf)
+	{
+		delete [] static_cast<uint8_t*>(buf);
 	}
 
 };

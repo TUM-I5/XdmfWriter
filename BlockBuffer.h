@@ -70,8 +70,8 @@ private:
 
 public:
 	BlockBuffer()
-		: m_rank(0), m_type(MPI_DATATYPE_NULL), m_extent(0), m_inCount(0), m_sendRank(0),
-		  m_sendCount(0), m_recvRanks(0), m_recvCounts(0L), m_outCount(0), m_requests(0L)
+		: m_rank(-1), m_type(MPI_DATATYPE_NULL), m_extent(0), m_inCount(0), m_sendRank(0),
+		  m_sendCount(0), m_recvRanks(0), m_recvCounts(0L), m_outCount(1), m_requests(0L)
 	{
 	}
 
@@ -103,12 +103,16 @@ public:
 
 		// Determine what we need to send, what is ours and what we receive
 		unsigned long sendSize = (blockSize - localStart % blockSize) % blockSize;
-		unsigned long recvSize = (blockSize - (localStart + localSize) % blockSize) % blockSize;
-		assert((localStart - sendSize + recvSize) % blockSize == 0);
+		sendSize = std::min(sendSize, localSize);
+		unsigned long recvSize;
+		if (sendSize >= localSize)
+			recvSize = 0;
+		else
+			recvSize = (blockSize - (localStart + localSize) % blockSize) % blockSize;
+		assert((localSize - sendSize + recvSize) % blockSize == 0);
 		unsigned int localBlocks = (localSize - sendSize + recvSize) / blockSize;
 
 		m_sendCount = sendSize / m_extent;
-		m_sendCount = std::min(m_sendCount, inCount);
 
 		// Compute all the ranks, from which we receive and to which we send
 		int numProcs;
@@ -159,6 +163,16 @@ public:
 	}
 
 	/**
+	 * @return <code>False</code> before initialization was called, <code>true</code> afterwards
+	 */
+	bool isInitialized() const
+	{
+		return m_rank >= 0;
+	}
+
+	/**
+	 * Before initialization this will always return 1.
+	 *
 	 * @return The number of elements after the exchange
 	 */
 	unsigned int count() const
@@ -243,7 +257,7 @@ public:
 			if (recvCounts[i] > 0) {
 				MPI_Irecv(buf+elemOffset*extent, recvCounts[i]*count, type,
 						m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
-				elemOffset += m_recvCounts[i];
+				elemOffset += recvCounts[i];
 			}
 		}
 

@@ -43,6 +43,14 @@ public:
 		m_blockBuffer1.init(5, MPI_DOUBLE, sizeof(double)*20);
 	}
 
+	void testIsInitialized()
+	{
+		BlockBuffer b;
+		TS_ASSERT(!b.isInitialized());
+
+		TS_ASSERT(m_blockBuffer0.isInitialized());
+	}
+
 	void testCount()
 	{
 		unsigned int count0[] = {16, 16, 28};

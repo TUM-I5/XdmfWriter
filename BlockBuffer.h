@@ -173,7 +173,7 @@ public:
 	 * @out The local data after the exchange. The caller is responsible
 	 *  for allocating this buffer.
 	 */
-	void exchange(void* in, void* out)
+	void exchange(const void* in, void* out)
 	{
 		_exchange(in, m_type, m_extent, 1, out);
 	}
@@ -183,7 +183,7 @@ public:
 	 * a continues type <code>type</code> with <code>count</code> elements.
 	 * The resulting block have the size type * count / orig_type * orig_block_size.
 	 */
-	void exchange(void* in, MPI_Datatype type, unsigned int count, void* out)
+	void exchange(const void* in, MPI_Datatype type, unsigned int count, void* out)
 	{
 		MPI_Aint lb;
 		MPI_Aint extent;
@@ -203,7 +203,7 @@ public:
 	 *  to free the memory
 	 */
 	template<typename T>
-	T* exchangeAny(T* in, MPI_Datatype type, unsigned int count,
+	T* exchangeAny(const T* in, MPI_Datatype type, unsigned int count,
 			unsigned int elemIn, unsigned int &elemOut)
 	{
 		MPI_Aint lb;
@@ -249,7 +249,7 @@ public:
 
 		// Send elements or copy
 		if (sendCount > 0)
-			MPI_Isend(in, sendCount*count, type, m_sendRank, 0,
+			MPI_Isend(const_cast<T*>(in), sendCount*count, type, m_sendRank, 0,
 					MPI_COMM_WORLD, &m_requests[0]);
 		else
 			memcpy(buf, in, elemIn*extent);
@@ -264,7 +264,7 @@ private:
 	 * @param extent Extent of a single element
 	 * @param count Number of elements
 	 */
-	void _exchange(void* in, MPI_Datatype type, MPI_Aint extent, unsigned int count, void* out)
+	void _exchange(const void* in, MPI_Datatype type, MPI_Aint extent, unsigned int count, void* out)
 	{
 		extent *= count;
 
@@ -280,11 +280,11 @@ private:
 
 		// Send first elements
 		if (m_sendCount > 0)
-			MPI_Isend(in, m_sendCount*count, type, m_sendRank, 0,
+			MPI_Isend(const_cast<void*>(in), m_sendCount*count, type, m_sendRank, 0,
 					MPI_COMM_WORLD, &m_requests[0]);
 
 		// Copy local elements
-		memcpy(out, static_cast<uint8_t*>(in)+m_sendCount*extent,
+		memcpy(out, static_cast<const uint8_t*>(in)+m_sendCount*extent,
 				(m_inCount-m_sendCount)*extent);
 
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);

@@ -221,7 +221,7 @@ public:
 		}
 
 		// Create block buffer
-		unsigned long blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCKSIZE", 1);
+		unsigned long blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
 		if (blockSize > 1) {
 			m_blockBuffer.init(numCells, MPI_DOUBLE, blockSize);
 

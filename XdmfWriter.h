@@ -103,10 +103,14 @@ private:
 
 public:
 	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames)
-		: m_comm(MPI_COMM_WORLD), m_rank(rank), m_outputPrefix(outputPrefix),
-		  m_variableNames(variableNames), m_totalCells(0), m_localCells(0), m_offsetCells(0),
+		: m_rank(rank), m_outputPrefix(outputPrefix), m_variableNames(variableNames),
+		  m_totalCells(0), m_localCells(0), m_offsetCells(0),
 		  m_blocks(0L), m_timeDimPos(0L), m_flushInterval(0), m_timestep(0)
 	{
+#ifdef PARALLEL
+	m_comm = MPI_COMM_WORLD;
+#endif // PARALLEL
+
 #ifdef USE_HDF
 		std::string prefix(outputPrefix);
 
@@ -212,11 +216,9 @@ public:
 		#pragma omp parallel for schedule(static)
 #endif
 		for (size_t i = 0; i < numCells*4; i++) {
-#ifdef PARALLEL
 			if (useVertexFilter)
 				h5Cells[i] = filter.globalIds()[cells[i]];
 			else
-#endif // PARALLEL
 				h5Cells[i] = cells[i] + offset;
 		}
 
@@ -259,6 +261,8 @@ public:
 			if (numCells > 0)
 				m_blocks = new double[numCells];
 		}
+#else // PARALLEL
+		const unsigned int *h5Cells = cells;
 #endif // PARALLEL
 
 		// Create and initialize the HDF5 file
@@ -392,7 +396,9 @@ public:
 			m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
 		}
 
+#ifdef PARALLEL
 		delete [] h5Cells;
+#endif // PARALLEL
 #endif // USE_HDF
 	}
 

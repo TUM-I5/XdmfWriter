@@ -240,16 +240,21 @@ public:
 		// Initialize the global ids we send back to the other processors
 		unsigned long *gids = new unsigned long[numSortVertices];
 
-		gids[sortSortIndices[0]] = 0;
-		for (unsigned int i = 1; i < numSortVertices; i++) {
-			if (equals(&sortVertices[sortSortIndices[i-1]*3], &sortVertices[sortSortIndices[i]*3]))
-				gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]];
-			else
-				gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]] + 1;
+		if (numSortVertices > 0) {
+			gids[sortSortIndices[0]] = 0;
+			for (unsigned int i = 1; i < numSortVertices; i++) {
+				if (equals(&sortVertices[sortSortIndices[i-1]*3], &sortVertices[sortSortIndices[i]*3]))
+					gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]];
+				else
+					gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]] + 1;
+			}
 		}
 
 		// Create the local vertices list
-		m_numLocalVertices = gids[sortSortIndices[numSortVertices-1]] + 1;
+		if (numSortVertices > 0)
+			m_numLocalVertices = gids[sortSortIndices[numSortVertices-1]] + 1;
+		else
+			m_numLocalVertices = 0;
 		delete [] m_localVertices;
 		m_localVertices = new double[m_numLocalVertices * 3];
 		for (unsigned int i = 0; i < numSortVertices; i++)

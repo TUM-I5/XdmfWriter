@@ -67,6 +67,9 @@ int main(int argc, char* argv[])
 
 	writer.init(numCells, cells, numVertices, vertices, true);
 
+	// Synchronize to measure performance of writing a time step
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	double *data = new double[numCells];
 
 	for (unsigned int i = 0; i < 20; i++) {

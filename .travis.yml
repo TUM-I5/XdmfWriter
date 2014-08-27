@@ -1,0 +1,21 @@
+language: cpp
+comiler:
+ - gcc
+ - clang
+
+before_install:
+ - sudo apt-get update -qq
+
+install:
+ - sudo apt-get install -qq openmpi-bin openmpi-common openmpi-dev libhdf5-openmpi-1.8.4 libhdf5-openmpi-dev
+
+before_script:
+ - export CC=mpicc
+ - export CXX=mpicxx
+
+script:
+ - cd test/
+ - scons parallelization=mpi unitTests=yes check
+
+after_script:
+ - cat config.log

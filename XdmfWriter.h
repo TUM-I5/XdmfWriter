@@ -28,6 +28,7 @@
 
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -60,7 +61,7 @@ private:
 
 	std::string m_outputPrefix;
 
-	std::ofstream m_xdmfFile;
+	std::fstream m_xdmfFile;
 
 #ifdef USE_HDF
 	hid_t m_hdfFile;
@@ -102,13 +103,17 @@ private:
 	unsigned int m_timestep;
 
 public:
-	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames)
+	/**
+	 * @param timestep Set this to > 0 to activate append mode
+	 */
+	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames,
+			unsigned int timestep = 0)
 		: m_rank(rank), m_outputPrefix(outputPrefix), m_variableNames(variableNames),
 		  m_totalCells(0), m_localCells(0), m_offsetCells(0),
-		  m_blocks(0L), m_timeDimPos(0L), m_flushInterval(0), m_timestep(0)
+		  m_blocks(0L), m_timeDimPos(0L), m_flushInterval(0), m_timestep(timestep)
 	{
 #ifdef PARALLEL
-	m_comm = MPI_COMM_WORLD;
+		m_comm = MPI_COMM_WORLD;
 #endif // PARALLEL
 
 #ifdef USE_HDF
@@ -118,6 +123,7 @@ public:
 
 			std::string xdmfName = prefix + ".xdmf";
 
+			std::ofstream(xdmfName.c_str()).close(); // Create the file (if it does not exist)
 			m_xdmfFile.open(xdmfName.c_str());
 
 			m_hdfFilename = prefix;
@@ -177,13 +183,36 @@ public:
 			for (size_t i = 0; i < m_variableNames.size(); i++) {
 				m_xdmfFile << "  <DataItem NumberType=\"Float\" Precision=\"8\" Format=\"HDF\" Dimensions=\"";
 				m_timeDimPos[i] = m_xdmfFile.tellp();
-				m_xdmfFile << std::setw(MAX_TIMESTEP_SPACE) << 0 << ' ' << totalSize[0] << "\">"
+				m_xdmfFile << std::setw(MAX_TIMESTEP_SPACE) << m_timestep << ' ' << totalSize[0] << "\">"
 						<< m_hdfFilename << ":/" << m_variableNames[i]
 						<< "</DataItem>" << std::endl;
 			}
 
 			m_xdmfFile << "  <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">" << std::endl;
-			closeXdmf();
+
+			if (m_timestep == 0)
+				closeXdmf();
+			else {
+				// Jump the correct position in the file
+				std::ostringstream tStartStream;
+				timeStepStartXdmf(tStartStream);
+				std::string tStart = tStartStream.str();
+
+				// Find beginning of the (correct) time step
+				std::string line;
+				while (getline(m_xdmfFile, line)) {
+					if (line.find(tStart))
+						break;
+				}
+				if (!m_xdmfFile)
+					logError() << "Unable to find time step for appending";
+
+				// Find end of this time step
+				while (getline(m_xdmfFile, line)) {
+					if (line.find("</Grid>"))
+						break;
+				}
+			}
 		}
 
 		// Create partition information
@@ -235,7 +264,7 @@ public:
 		unsigned long *blockedCells = 0L;
 		double *blockedVertices = 0L;
 		unsigned int *blockedPartInfo = 0L;
-		if (m_blockBuffer.isInitialized()) {
+		if (m_blockBuffer.isInitialized() && m_timestep == 0) {
 			numCells = m_blockBuffer.count();
 			blockedCells = new unsigned long[numCells * 4];
 			m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, 4, blockedCells);
@@ -278,7 +307,10 @@ public:
 			H5Pset_fapl_mpio(h5plist, m_comm, MPI_INFO_NULL);
 #endif // PARALLEL
 
-			m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
+			if (m_timestep == 0)
+				m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
+			else
+				m_hdfFile = H5Fopen(hdfName.c_str(), H5F_ACC_RDWR, h5plist);
 
 			H5Pclose(h5plist);
 
@@ -290,49 +322,8 @@ public:
 			offsets[0] -= numCells;
 			offsets[1] -= numVertices;
 
-			// Create connect dataset
-			hsize_t connectDims[2] = {totalSize[0], 4};
-			hid_t h5ConnectSpace = H5Screate_simple(2, connectDims, 0L);
-			hid_t h5Connect = H5Dcreate(m_hdfFile, "/connect", H5T_STD_U64LE, h5ConnectSpace,
-					H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-			// Create geometry dataset
-			hsize_t geometryDims[2] = {totalSize[1], 3};
-			hid_t h5GeometrySpace = H5Screate_simple(2, geometryDims, 0L);
-			hid_t h5Geometry = H5Dcreate(m_hdfFile, "/geometry", H5T_IEEE_F64LE, h5GeometrySpace,
-					H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-			// Create partition dataset
-			hsize_t partDim = totalSize[0];
-			hid_t h5PartitionSpace = H5Screate_simple(1, &partDim, 0L);
-			hid_t h5Partition = H5Dcreate(m_hdfFile, "/partition", H5T_STD_U32LE, h5PartitionSpace,
-					H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-			// Create variable datasets
+			// Allocate array for the variable ids
 			m_hdfVars = new hid_t[m_variableNames.size()];
-
-			hsize_t varChunkDims[2] = {
-					utils::Env::get<hsize_t>("XDMFWRITER_TIME_CHUNK_SIZE", 1),
-					utils::Env::get<hsize_t>("XDMFWRITER_ELEMENT_CHUNK_SIZE", 0)};
-			if (varChunkDims[1] == 0)
-				// 0 elements -> all elements
-				varChunkDims[1] = totalSize[0];
-			hid_t h5pCreate = H5Pcreate(H5P_DATASET_CREATE);
-			H5Pset_chunk(h5pCreate, 2, varChunkDims);
-
-			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				hsize_t varDims[2] = {0, totalSize[0]};
-				hsize_t varDimsMax[2] = {H5S_UNLIMITED, totalSize[0]};
-				hid_t h5VarSpace = H5Screate_simple(2, varDims, varDimsMax);
-				std::string varName("/");
-				varName += m_variableNames[i];
-
-				m_hdfVars[i] = H5Dcreate(m_hdfFile, varName.c_str(), H5T_IEEE_F64LE, h5VarSpace,
-						H5P_DEFAULT, h5pCreate, H5P_DEFAULT);
-
-				H5Sclose(h5VarSpace);
-			}
-			H5Pclose(h5pCreate);
 
 			// Parallel access for all datasets
 #ifdef PARALLEL
@@ -340,48 +331,102 @@ public:
 			H5Pset_dxpl_mpio(m_hdfAccessList, H5FD_MPIO_COLLECTIVE);
 #endif // PARALLEL
 
-			// Write connectivity
-			hsize_t connectWriteStart[2] = {offsets[0], 0};
-			hsize_t connectWriteCount[2] = {numCells, 4};
-			hid_t h5MemSpace = H5Screate_simple(2, connectWriteCount, 0L);
-			H5Sselect_hyperslab(h5ConnectSpace, H5S_SELECT_SET, connectWriteStart, 0L, connectWriteCount, 0L);
+			if (m_timestep == 0) {
+				// Create connect dataset
+				hsize_t connectDims[2] = {totalSize[0], 4};
+				hid_t h5ConnectSpace = H5Screate_simple(2, connectDims, 0L);
+				hid_t h5Connect = H5Dcreate(m_hdfFile, "/connect", H5T_STD_U64LE, h5ConnectSpace,
+						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-			herr_t h5status = H5Dwrite(h5Connect, H5T_NATIVE_ULONG, h5MemSpace, h5ConnectSpace, m_hdfAccessList, h5Cells);
-			H5Sclose(h5MemSpace);
+				// Create geometry dataset
+				hsize_t geometryDims[2] = {totalSize[1], 3};
+				hid_t h5GeometrySpace = H5Screate_simple(2, geometryDims, 0L);
+				hid_t h5Geometry = H5Dcreate(m_hdfFile, "/geometry", H5T_IEEE_F64LE, h5GeometrySpace,
+						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-			// Write geometry
-			hsize_t geometryWriteStart[2] = {offsets[1], 0};
-			hsize_t geometryWriteCount[2] = {numVertices, 3};
-			h5MemSpace = H5Screate_simple(2, geometryWriteCount, 0L);
-			H5Sselect_hyperslab(h5GeometrySpace, H5S_SELECT_SET, geometryWriteStart, 0L, geometryWriteCount, 0L);
+				// Create partition dataset
+				hsize_t partDim = totalSize[0];
+				hid_t h5PartitionSpace = H5Screate_simple(1, &partDim, 0L);
+				hid_t h5Partition = H5Dcreate(m_hdfFile, "/partition", H5T_STD_U32LE, h5PartitionSpace,
+						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-			h5status = H5Dwrite(h5Geometry, H5T_NATIVE_DOUBLE, h5MemSpace, h5GeometrySpace, m_hdfAccessList, vertices);
-			H5Sclose(h5MemSpace);
+				// Create variable datasets
+				hsize_t varChunkDims[2] = {
+						utils::Env::get<hsize_t>("XDMFWRITER_TIME_CHUNK_SIZE", 1),
+						utils::Env::get<hsize_t>("XDMFWRITER_ELEMENT_CHUNK_SIZE", 0)};
+				if (varChunkDims[1] == 0)
+					// 0 elements -> all elements
+					varChunkDims[1] = totalSize[0];
+				hid_t h5pCreate = H5Pcreate(H5P_DATASET_CREATE);
+				H5Pset_chunk(h5pCreate, 2, varChunkDims);
+
+				for (size_t i = 0; i < m_variableNames.size(); i++) {
+					std::string varName("/");
+					varName += m_variableNames[i];
+
+					hsize_t varDims[2] = {0, totalSize[0]};
+					hsize_t varDimsMax[2] = {H5S_UNLIMITED, totalSize[0]};
+					hid_t h5VarSpace = H5Screate_simple(2, varDims, varDimsMax);
+
+					m_hdfVars[i] = H5Dcreate(m_hdfFile, varName.c_str(), H5T_IEEE_F64LE, h5VarSpace,
+							H5P_DEFAULT, h5pCreate, H5P_DEFAULT);
+
+					H5Sclose(h5VarSpace);
+				}
+				H5Pclose(h5pCreate);
+
+				// Write connectivity
+				hsize_t connectWriteStart[2] = {offsets[0], 0};
+				hsize_t connectWriteCount[2] = {numCells, 4};
+				hid_t h5MemSpace = H5Screate_simple(2, connectWriteCount, 0L);
+				H5Sselect_hyperslab(h5ConnectSpace, H5S_SELECT_SET, connectWriteStart, 0L, connectWriteCount, 0L);
+
+				herr_t h5status = H5Dwrite(h5Connect, H5T_NATIVE_ULONG, h5MemSpace, h5ConnectSpace, m_hdfAccessList, h5Cells);
+				H5Sclose(h5MemSpace);
+
+				// Write geometry
+				hsize_t geometryWriteStart[2] = {offsets[1], 0};
+				hsize_t geometryWriteCount[2] = {numVertices, 3};
+				h5MemSpace = H5Screate_simple(2, geometryWriteCount, 0L);
+				H5Sselect_hyperslab(h5GeometrySpace, H5S_SELECT_SET, geometryWriteStart, 0L, geometryWriteCount, 0L);
+
+				h5status = H5Dwrite(h5Geometry, H5T_NATIVE_DOUBLE, h5MemSpace, h5GeometrySpace, m_hdfAccessList, vertices);
+				H5Sclose(h5MemSpace);
 
 #ifdef PARALLEL
-			BlockBuffer::free(blockedVertices);
+				BlockBuffer::free(blockedVertices);
 #endif // PARALLEL
 
-			// Write partition information
-			hsize_t partitionWriteStart = offsets[0];
-			hsize_t partitionWriteCount = numCells;
-			h5MemSpace = H5Screate_simple(1, &partitionWriteCount, 0L);
-			H5Sselect_hyperslab(h5PartitionSpace, H5S_SELECT_SET, &partitionWriteStart, 0L, &partitionWriteCount, 0L);
+				// Write partition information
+				hsize_t partitionWriteStart = offsets[0];
+				hsize_t partitionWriteCount = numCells;
+				h5MemSpace = H5Screate_simple(1, &partitionWriteCount, 0L);
+				H5Sselect_hyperslab(h5PartitionSpace, H5S_SELECT_SET, &partitionWriteStart, 0L, &partitionWriteCount, 0L);
 
-			h5status = H5Dwrite(h5Partition, H5T_NATIVE_UINT, h5MemSpace, h5PartitionSpace, m_hdfAccessList, partInfo);
-			H5Sclose(h5MemSpace);
+				h5status = H5Dwrite(h5Partition, H5T_NATIVE_UINT, h5MemSpace, h5PartitionSpace, m_hdfAccessList, partInfo);
+				H5Sclose(h5MemSpace);
 
-			delete [] partInfo;
+				delete [] partInfo;
 
-			// Close all datasets we only write once
-			H5Dclose(h5Connect);
-			H5Sclose(h5ConnectSpace);
-			H5Dclose(h5Geometry);
-			H5Sclose(h5GeometrySpace);
-			H5Dclose(h5Partition);
-			H5Sclose(h5PartitionSpace);
+				// Close all datasets we only write once
+				H5Dclose(h5Connect);
+				H5Sclose(h5ConnectSpace);
+				H5Dclose(h5Geometry);
+				H5Sclose(h5GeometrySpace);
+				H5Dclose(h5Partition);
+				H5Sclose(h5PartitionSpace);
 
-			h5status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
+				h5status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
+			} else {
+				// Get variable datasets
+
+				for (size_t i = 0; i < m_variableNames.size(); i++) {
+					std::string varName("/");
+					varName += m_variableNames[i];
+
+					m_hdfVars[i] = H5Dopen(m_hdfFile, varName.c_str(), H5P_DEFAULT);
+				}
+			}
 
 			// Memory space we use for writing one variable at one time step
 			hsize_t writeCount[2] = {1, numCells};
@@ -436,9 +481,10 @@ public:
 	{
 #ifdef USE_HDF
 		if (m_rank == 0) {
-			m_xdmfFile << "   <Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << m_timestep << std::setfill(' ')
-					<< "\" GridType=\"Uniform\">" << std::endl
-					<< "    <Topology Reference=\"/Xdmf/Domain/Topology[1]\"/>" << std::endl
+			m_xdmfFile << "   ";
+			timeStepStartXdmf(m_xdmfFile);
+			m_xdmfFile << std::endl;
+			m_xdmfFile << "    <Topology Reference=\"/Xdmf/Domain/Topology[1]\"/>" << std::endl
 					<< "    <Geometry Reference=\"/Xdmf/Domain/Geometry[1]\"/>" << std::endl
 					<< "    <Time Value=\"" << time << "\"/>" << std::endl;
 			m_xdmfFile << "    <Attribute Name= \"partition\" Center=\"Cell\">" << std::endl
@@ -529,6 +575,15 @@ private:
 				<< "</Xdmf>" << std::endl;
 		m_xdmfFile.seekp(contPos);
 #endif // USE_HDF
+	}
+
+	/**
+	 * Write the beginning of a time step to the stream
+	 */
+	void timeStepStartXdmf(std::ostream &s)
+	{
+		s << "<Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << m_timestep << std::setfill(' ')
+				<< "\" GridType=\"Uniform\">";
 	}
 
 private:

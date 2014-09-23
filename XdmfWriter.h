@@ -565,6 +565,14 @@ public:
 #endif // USE_HDF
 	}
 
+	/**
+	 * @return The current time step of the output file
+	 */
+	unsigned int timestep() const
+	{
+		return m_timestep;
+	}
+
 private:
 	void closeXdmf()
 	{

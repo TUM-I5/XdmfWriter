@@ -24,6 +24,7 @@ Import('env')
 
 env.testSourceFiles += [env.Object('main.cpp'),
                         os.path.abspath('BlockBuffer.t.h'),
-                        os.path.abspath('ParallelVertexFilter.t.h')]
+                        os.path.abspath('ParallelVertexFilter.t.h'),
+                        os.path.abspath('XdmfWriter.t.h')]
 
 Export('env')

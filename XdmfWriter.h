@@ -123,7 +123,7 @@ public:
 
 			std::string xdmfName = prefix + ".xdmf";
 
-			std::ofstream(xdmfName.c_str()).close(); // Create the file (if it does not exist)
+			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
 			m_xdmfFile.open(xdmfName.c_str());
 
 			m_hdfFilename = prefix;
@@ -195,13 +195,13 @@ public:
 			else {
 				// Jump the correct position in the file
 				std::ostringstream tStartStream;
-				timeStepStartXdmf(tStartStream);
+				timeStepStartXdmf(m_timestep-1, tStartStream);
 				std::string tStart = tStartStream.str();
 
 				// Find beginning of the (correct) time step
 				std::string line;
 				while (getline(m_xdmfFile, line)) {
-					if (line.find(tStart))
+					if (line.find(tStart) != std::string::npos)
 						break;
 				}
 				if (!m_xdmfFile)
@@ -209,7 +209,7 @@ public:
 
 				// Find end of this time step
 				while (getline(m_xdmfFile, line)) {
-					if (line.find("</Grid>"))
+					if (line.find("</Grid>") != std::string::npos)
 						break;
 				}
 			}
@@ -482,7 +482,7 @@ public:
 #ifdef USE_HDF
 		if (m_rank == 0) {
 			m_xdmfFile << "   ";
-			timeStepStartXdmf(m_xdmfFile);
+			timeStepStartXdmf(m_timestep, m_xdmfFile);
 			m_xdmfFile << std::endl;
 			m_xdmfFile << "    <Topology Reference=\"/Xdmf/Domain/Topology[1]\"/>" << std::endl
 					<< "    <Geometry Reference=\"/Xdmf/Domain/Geometry[1]\"/>" << std::endl
@@ -580,9 +580,9 @@ private:
 	/**
 	 * Write the beginning of a time step to the stream
 	 */
-	void timeStepStartXdmf(std::ostream &s)
+	static void timeStepStartXdmf(unsigned int timestep, std::ostream &s)
 	{
-		s << "<Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << m_timestep << std::setfill(' ')
+		s << "<Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << timestep << std::setfill(' ')
 				<< "\" GridType=\"Uniform\">";
 	}
 

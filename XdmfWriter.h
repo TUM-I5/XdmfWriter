@@ -238,19 +238,28 @@ public:
 			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 			offset -= numVertices;
 		}
+#endif // PARALLEL
 
-		// Add vertex offset to all cells
+		// Add vertex offset to all cells and convert to unsigned long
 		unsigned long *h5Cells = new unsigned long[numCells * 4];
+#ifdef PARALLEL
+		if (useVertexFilter) {
 #ifdef _OPENMP
-		#pragma omp parallel for schedule(static)
+			#pragma omp parallel for schedule(static)
 #endif
-		for (size_t i = 0; i < numCells*4; i++) {
-			if (useVertexFilter)
+			for (size_t i = 0; i < numCells*4; i++)
 				h5Cells[i] = filter.globalIds()[cells[i]];
-			else
+		} else
+#endif // PARALLEL
+		{
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif
+			for (size_t i = 0; i < numCells*4; i++)
 				h5Cells[i] = cells[i] + offset;
 		}
 
+#ifdef PARALLEL
 		// Create block buffer
 		unsigned long blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
 		if (blockSize > 1) {
@@ -290,8 +299,6 @@ public:
 			if (numCells > 0)
 				m_blocks = new double[numCells];
 		}
-#else // PARALLEL
-		const unsigned int *h5Cells = cells;
 #endif // PARALLEL
 
 		// Create and initialize the HDF5 file
@@ -441,9 +448,7 @@ public:
 			m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
 		}
 
-#ifdef PARALLEL
 		delete [] h5Cells;
-#endif // PARALLEL
 #endif // USE_HDF
 	}
 

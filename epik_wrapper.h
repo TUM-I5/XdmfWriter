@@ -19,6 +19,9 @@
  * @author Sebastian Rettenberger <rettenbs@in.tum.de>
  */
 
+#ifndef EPIK_WRAPPER_H
+#define EPIK_WRAPPER_H
+
 /**
  * Manual instrumentation for Scalasca with epik.
  * Override function calls if not compiled with EPIK.
@@ -34,3 +37,5 @@
 #define EPIK_USER_END(id)
 #define EPIK_TRACER(str)
 #endif
+
+#endif EPIK_WRAPPER_H

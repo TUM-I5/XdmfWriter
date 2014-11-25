@@ -59,9 +59,10 @@ vars.AddVariables(
                 allowed_values=('debug', 'info', 'warning', 'error')
               ),
 
-  BoolVariable( 'scalasca',
+  EnumVariable( 'scalasca',
                 'instruments code with scalasca',
-                False
+                'none',
+                allowed_values=('none', '1', '2')
               )
 )
 
@@ -134,9 +135,12 @@ else:
     env['CXX'] = 'g++'
 
 # instrument code with scalasca
-if env['scalasca']:
+if env['scalasca'] == '1':
   for mode in ['CC', 'CXX']:
     env[mode] = 'scalasca -instrument -comp=none -user -mode=MPI ' + env[mode]
+elif env['scalasca'] == '2':
+  for mode in ['CC', 'CXX']:
+    env[mode] = 'scorep --noonline-access --nocompiler --user --mpp=mpi --thread=none ' + env[mode]
 
 # add parallel flag for mpi
 if env['parallelization'] in ['mpi']:

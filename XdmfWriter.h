@@ -40,6 +40,7 @@
 #include "utils/logger.h"
 
 #include "epik_wrapper.h"
+#include "scorep_wrapper.h"
 #ifdef PARALLEL
 #include "BlockBuffer.h"
 #include "ParallelVertexFilter.h"
@@ -529,6 +530,7 @@ public:
 	void writeData(unsigned int id, const double *data)
 	{
 		EPIK_TRACER("XDMFWriter_writeData");
+		SCOREP_USER_REGION("XDMFWriter_writeData", SCOREP_USER_REGION_TYPE_FUNCTION);
 
 #ifdef USE_HDF
 #ifdef PARALLEL
@@ -561,6 +563,7 @@ public:
 	void flush()
 	{
 		EPIK_TRACER("XDMFWriter_flush");
+		SCOREP_USER_REGION("XDMFWriter_flush", SCOREP_USER_REGION_TYPE_FUNCTION);
 
 #ifdef USE_HDF
 		if (m_blockBuffer.count() > 0) {

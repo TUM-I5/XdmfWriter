@@ -38,4 +38,4 @@
 #define EPIK_TRACER(str)
 #endif
 
-#endif EPIK_WRAPPER_H
+#endif // EPIK_WRAPPER_H

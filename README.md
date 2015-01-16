@@ -9,7 +9,7 @@ Documentation
 License
 -------
 
-XdmfWriter is released under LGPL (see [COPYING](COPYING))
+XdmfWriter is released under BSD-3 (see [COPYING](COPYING))
 
 Build Status
 ------------

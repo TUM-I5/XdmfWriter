@@ -323,21 +323,23 @@ public:
 
 			// Create the file
 			hid_t h5plist = H5Pcreate(H5P_FILE_ACCESS);
-			H5Pset_libver_bounds(h5plist, H5F_LIBVER_LATEST, H5F_LIBVER_LATEST);
-			H5Pset_meta_block_size(h5plist, 1024*1024);
+			checkH5Err(h5plist);
+			checkH5Err(H5Pset_libver_bounds(h5plist, H5F_LIBVER_LATEST, H5F_LIBVER_LATEST));
+			checkH5Err(H5Pset_meta_block_size(h5plist, 1024*1024));
 			hsize_t align = utils::Env::get<hsize_t>("XDMFWRITER_ALIGNMENT", 0);
 			if (align > 0)
-				H5Pset_alignment(h5plist, 1, align);
+				checkH5Err(H5Pset_alignment(h5plist, 1, align));
 #ifdef PARALLEL
-			H5Pset_fapl_mpio(h5plist, m_comm, MPI_INFO_NULL);
+			checkH5Err(H5Pset_fapl_mpio(h5plist, m_comm, MPI_INFO_NULL));
 #endif // PARALLEL
 
 			if (m_timestep == 0)
 				m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
 			else
 				m_hdfFile = H5Fopen(hdfName.c_str(), H5F_ACC_RDWR, h5plist);
+			checkH5Err(m_hdfFile);
 
-			H5Pclose(h5plist);
+			checkH5Err(H5Pclose(h5plist));
 
 			// Compute the offsets where we should start in HDF5 file
 			unsigned long offsets[2] = {numCells, numVertices};
@@ -353,27 +355,34 @@ public:
 			// Parallel access for all datasets
 #ifdef PARALLEL
 			m_hdfAccessList = H5Pcreate(H5P_DATASET_XFER);
-			H5Pset_dxpl_mpio(m_hdfAccessList, H5FD_MPIO_COLLECTIVE);
+			checkH5Err(m_hdfAccessList);
+			checkH5Err(H5Pset_dxpl_mpio(m_hdfAccessList, H5FD_MPIO_COLLECTIVE));
 #endif // PARALLEL
 
 			if (m_timestep == 0) {
 				// Create connect dataset
 				hsize_t connectDims[2] = {totalSize[0], 4};
 				hid_t h5ConnectSpace = H5Screate_simple(2, connectDims, 0L);
+				checkH5Err(h5ConnectSpace);
 				hid_t h5Connect = H5Dcreate(m_hdfFile, "/connect", H5T_STD_U64LE, h5ConnectSpace,
 						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+				checkH5Err(h5Connect);
 
 				// Create geometry dataset
 				hsize_t geometryDims[2] = {totalSize[1], 3};
 				hid_t h5GeometrySpace = H5Screate_simple(2, geometryDims, 0L);
+				checkH5Err(h5GeometrySpace);
 				hid_t h5Geometry = H5Dcreate(m_hdfFile, "/geometry", H5T_IEEE_F64LE, h5GeometrySpace,
 						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+				checkH5Err(h5Geometry);
 
 				// Create partition dataset
 				hsize_t partDim = totalSize[0];
 				hid_t h5PartitionSpace = H5Screate_simple(1, &partDim, 0L);
+				checkH5Err(h5PartitionSpace);
 				hid_t h5Partition = H5Dcreate(m_hdfFile, "/partition", H5T_STD_U32LE, h5PartitionSpace,
 						H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+				checkH5Err(h5Partition);
 
 				// Create variable datasets
 				hsize_t varChunkDims[2] = {
@@ -382,8 +391,10 @@ public:
 				if (varChunkDims[1] == 0)
 					// 0 elements -> all elements
 					varChunkDims[1] = totalSize[0];
+				// TODO add additional check for the chunk size
 				hid_t h5pCreate = H5Pcreate(H5P_DATASET_CREATE);
-				H5Pset_chunk(h5pCreate, 2, varChunkDims);
+				checkH5Err(h5pCreate);
+				checkH5Err(H5Pset_chunk(h5pCreate, 2, varChunkDims));
 
 				for (size_t i = 0; i < m_variableNames.size(); i++) {
 					std::string varName("/");
@@ -392,31 +403,35 @@ public:
 					hsize_t varDims[2] = {0, totalSize[0]};
 					hsize_t varDimsMax[2] = {H5S_UNLIMITED, totalSize[0]};
 					hid_t h5VarSpace = H5Screate_simple(2, varDims, varDimsMax);
+					checkH5Err(h5VarSpace);
 
 					m_hdfVars[i] = H5Dcreate(m_hdfFile, varName.c_str(), H5T_IEEE_F64LE, h5VarSpace,
 							H5P_DEFAULT, h5pCreate, H5P_DEFAULT);
+					checkH5Err(m_hdfVars[i]);
 
-					H5Sclose(h5VarSpace);
+					checkH5Err(H5Sclose(h5VarSpace));
 				}
-				H5Pclose(h5pCreate);
+				checkH5Err(H5Pclose(h5pCreate));
 
 				// Write connectivity
 				hsize_t connectWriteStart[2] = {offsets[0], 0};
 				hsize_t connectWriteCount[2] = {numCells, 4};
 				hid_t h5MemSpace = H5Screate_simple(2, connectWriteCount, 0L);
-				H5Sselect_hyperslab(h5ConnectSpace, H5S_SELECT_SET, connectWriteStart, 0L, connectWriteCount, 0L);
+				checkH5Err(h5MemSpace);
+				checkH5Err(H5Sselect_hyperslab(h5ConnectSpace, H5S_SELECT_SET, connectWriteStart, 0L, connectWriteCount, 0L));
 
-				herr_t h5status = H5Dwrite(h5Connect, H5T_NATIVE_ULONG, h5MemSpace, h5ConnectSpace, m_hdfAccessList, h5Cells);
-				H5Sclose(h5MemSpace);
+				checkH5Err(H5Dwrite(h5Connect, H5T_NATIVE_ULONG, h5MemSpace, h5ConnectSpace, m_hdfAccessList, h5Cells));
+				checkH5Err(H5Sclose(h5MemSpace));
 
 				// Write geometry
 				hsize_t geometryWriteStart[2] = {offsets[1], 0};
 				hsize_t geometryWriteCount[2] = {numVertices, 3};
 				h5MemSpace = H5Screate_simple(2, geometryWriteCount, 0L);
-				H5Sselect_hyperslab(h5GeometrySpace, H5S_SELECT_SET, geometryWriteStart, 0L, geometryWriteCount, 0L);
+				checkH5Err(h5MemSpace);
+				checkH5Err(H5Sselect_hyperslab(h5GeometrySpace, H5S_SELECT_SET, geometryWriteStart, 0L, geometryWriteCount, 0L));
 
-				h5status = H5Dwrite(h5Geometry, H5T_NATIVE_DOUBLE, h5MemSpace, h5GeometrySpace, m_hdfAccessList, vertices);
-				H5Sclose(h5MemSpace);
+				checkH5Err(H5Dwrite(h5Geometry, H5T_NATIVE_DOUBLE, h5MemSpace, h5GeometrySpace, m_hdfAccessList, vertices));
+				checkH5Err(H5Sclose(h5MemSpace));
 
 #ifdef PARALLEL
 				BlockBuffer::free(blockedVertices);
@@ -426,22 +441,23 @@ public:
 				hsize_t partitionWriteStart = offsets[0];
 				hsize_t partitionWriteCount = numCells;
 				h5MemSpace = H5Screate_simple(1, &partitionWriteCount, 0L);
-				H5Sselect_hyperslab(h5PartitionSpace, H5S_SELECT_SET, &partitionWriteStart, 0L, &partitionWriteCount, 0L);
+				checkH5Err(h5MemSpace);
+				checkH5Err(H5Sselect_hyperslab(h5PartitionSpace, H5S_SELECT_SET, &partitionWriteStart, 0L, &partitionWriteCount, 0L));
 
-				h5status = H5Dwrite(h5Partition, H5T_NATIVE_UINT, h5MemSpace, h5PartitionSpace, m_hdfAccessList, partInfo);
-				H5Sclose(h5MemSpace);
+				checkH5Err(H5Dwrite(h5Partition, H5T_NATIVE_UINT, h5MemSpace, h5PartitionSpace, m_hdfAccessList, partInfo));
+				checkH5Err(H5Sclose(h5MemSpace));
 
 				delete [] partInfo;
 
 				// Close all datasets we only write once
-				H5Dclose(h5Connect);
-				H5Sclose(h5ConnectSpace);
-				H5Dclose(h5Geometry);
-				H5Sclose(h5GeometrySpace);
-				H5Dclose(h5Partition);
-				H5Sclose(h5PartitionSpace);
+				checkH5Err(H5Dclose(h5Connect));
+				checkH5Err(H5Sclose(h5ConnectSpace));
+				checkH5Err(H5Dclose(h5Geometry));
+				checkH5Err(H5Sclose(h5GeometrySpace));
+				checkH5Err(H5Dclose(h5Partition));
+				checkH5Err(H5Sclose(h5PartitionSpace));
 
-				h5status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
+				checkH5Err(H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL));
 			} else {
 				// Get variable datasets
 
@@ -450,12 +466,14 @@ public:
 					varName += m_variableNames[i];
 
 					m_hdfVars[i] = H5Dopen(m_hdfFile, varName.c_str(), H5P_DEFAULT);
+					checkH5Err(m_hdfVars[i]);
 				}
 			}
 
 			// Memory space we use for writing one variable at one time step
 			hsize_t writeCount[2] = {1, numCells};
 			m_hdfVarMemSpace = H5Screate_simple(2, writeCount, 0L);
+			checkH5Err(m_hdfVarMemSpace);
 
 			// Save values we require for resizing the variables and setting the local hyperslab
 			m_totalCells = totalSize[0];
@@ -478,10 +496,10 @@ public:
 #ifdef USE_HDF
 		if (m_blockBuffer.count() > 0) {
 			for (size_t i = 0; i < m_variableNames.size(); i++)
-				H5Dclose(m_hdfVars[i]);
-			H5Sclose(m_hdfVarMemSpace);
-			H5Pclose(m_hdfAccessList);
-			H5Fclose(m_hdfFile);
+				checkH5Err(H5Dclose(m_hdfVars[i]));
+			checkH5Err(H5Sclose(m_hdfVarMemSpace));
+			checkH5Err(H5Pclose(m_hdfAccessList));
+			checkH5Err(H5Fclose(m_hdfFile));
 
 #ifdef PARALLEL
 			if (m_blockBuffer.isInitialized())
@@ -559,17 +577,18 @@ public:
 
 		if (m_blockBuffer.count() > 0) {
 			hsize_t extent[2] = {m_timestep, m_totalCells};
-			H5Dset_extent(m_hdfVars[id], extent);
+			checkH5Err(H5Dset_extent(m_hdfVars[id], extent));
 
 			hid_t h5VarSpace = H5Dget_space(m_hdfVars[id]);
+			checkH5Err(h5VarSpace);
 			hsize_t writeStart[2] = {m_timestep-1, m_offsetCells}; // We already increment m_timestep
 			hsize_t writeCount[2] = {1, m_localCells};
-			H5Sselect_hyperslab(h5VarSpace, H5S_SELECT_SET, writeStart, 0L, writeCount, 0L);
+			checkH5Err(H5Sselect_hyperslab(h5VarSpace, H5S_SELECT_SET, writeStart, 0L, writeCount, 0L));
 
-			herr_t h5status = H5Dwrite(m_hdfVars[id], H5T_NATIVE_DOUBLE, m_hdfVarMemSpace,
-					h5VarSpace, m_hdfAccessList, data);
+			checkH5Err(H5Dwrite(m_hdfVars[id], H5T_NATIVE_DOUBLE, m_hdfVarMemSpace,
+					h5VarSpace, m_hdfAccessList, data));
 
-			H5Sclose(h5VarSpace);
+			checkH5Err(H5Sclose(h5VarSpace));
 		}
 #endif // USE_HDF
 	}
@@ -585,7 +604,7 @@ public:
 #ifdef USE_HDF
 		if (m_blockBuffer.count() > 0) {
 			if (m_timestep % m_flushInterval == 0)
-				herr_t status = H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL);
+				checkH5Err(H5Fflush(m_hdfFile, H5F_SCOPE_GLOBAL));
 		}
 #endif // USE_HDF
 	}
@@ -617,6 +636,13 @@ private:
 	{
 		s << "<Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << timestep << std::setfill(' ')
 				<< "\" GridType=\"Uniform\">";
+	}
+
+	template<typename T>
+	static void checkH5Err(T status)
+	{
+		if (status < 0)
+			logError() << "An HDF5 error occurred in the XDMF writer";
 	}
 
 private:

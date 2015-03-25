@@ -169,6 +169,42 @@ public:
 	{
 #ifdef USE_HDF
 
+		unsigned int offset = 0;
+#ifdef PARALLEL
+		// Apply vertex filter
+		ParallelVertexFilter filter;
+		if (useVertexFilter) {
+			// Filter duplicate vertices
+			filter.filter(numVertices, vertices);
+			vertices = filter.localVertices();
+			numVertices = filter.numLocalVertices();
+		} else {
+			// No vertex filter -> just get the offset we should at
+			offset = numVertices;
+			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+			offset -= numVertices;
+		}
+#endif // PARALLEL
+
+		// Add vertex offset to all cells and convert to unsigned long
+		unsigned long *h5Cells = new unsigned long[numCells * 4];
+#ifdef PARALLEL
+		if (useVertexFilter) {
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif
+			for (size_t i = 0; i < numCells*4; i++)
+				h5Cells[i] = filter.globalIds()[cells[i]];
+		} else
+#endif // PARALLEL
+		{
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif
+			for (size_t i = 0; i < numCells*4; i++)
+				h5Cells[i] = cells[i] + offset;
+		}
+
 		// Initialize the XDMF file
 		unsigned long totalSize[2] = {numCells, numVertices};
 #ifdef PARALLEL
@@ -238,42 +274,6 @@ public:
 #endif
 		for (unsigned int i = 0; i < numCells; i++)
 			partInfo[i] = m_rank;
-
-		unsigned int offset = 0;
-#ifdef PARALLEL
-		// Apply vertex filter
-		ParallelVertexFilter filter;
-		if (useVertexFilter) {
-			// Filter duplicate vertices
-			filter.filter(numVertices, vertices);
-			vertices = filter.localVertices();
-			numVertices = filter.numLocalVertices();
-		} else {
-			// No vertex filter -> just get the offset we should at
-			offset = numVertices;
-			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-			offset -= numVertices;
-		}
-#endif // PARALLEL
-
-		// Add vertex offset to all cells and convert to unsigned long
-		unsigned long *h5Cells = new unsigned long[numCells * 4];
-#ifdef PARALLEL
-		if (useVertexFilter) {
-#ifdef _OPENMP
-			#pragma omp parallel for schedule(static)
-#endif
-			for (size_t i = 0; i < numCells*4; i++)
-				h5Cells[i] = filter.globalIds()[cells[i]];
-		} else
-#endif // PARALLEL
-		{
-#ifdef _OPENMP
-			#pragma omp parallel for schedule(static)
-#endif
-			for (size_t i = 0; i < numCells*4; i++)
-				h5Cells[i] = cells[i] + offset;
-		}
 
 #ifdef PARALLEL
 		// Create block buffer

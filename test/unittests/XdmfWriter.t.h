@@ -43,6 +43,7 @@
 #include <iterator>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include <hdf5.h>
 

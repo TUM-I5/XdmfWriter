@@ -41,11 +41,14 @@
 #include <mpi.h>
 #endif // PARALLEL
 
+#include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #ifdef USE_HDF
 #include <hdf5.h>
@@ -333,9 +336,15 @@ public:
 			checkH5Err(H5Pset_fapl_mpio(h5plist, m_comm, MPI_INFO_NULL));
 #endif // PARALLEL
 
-			if (m_timestep == 0)
+			if (m_timestep == 0) {
+				struct stat statBuffer;
+				if (m_rank == 0 && stat(hdfName.c_str(), &statBuffer) == 0) {
+					logWarning() << "HDF5 output file already exists. Creating backup.";
+					rename(hdfName.c_str(), (hdfName + ".bak").c_str());
+				}
+
 				m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
-			else
+			} else
 				m_hdfFile = H5Fopen(hdfName.c_str(), H5F_ACC_RDWR, h5plist);
 			checkH5Err(m_hdfFile);
 

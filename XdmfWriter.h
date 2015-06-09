@@ -343,6 +343,11 @@ public:
 					rename(hdfName.c_str(), (hdfName + ".bak").c_str());
 				}
 
+#ifdef PARALLEL
+				// Make sure the file is moved before continuing
+				MPI_Barrier(m_comm);
+#endif // PARALLEL
+
 				m_hdfFile = H5Fcreate(hdfName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
 			} else
 				m_hdfFile = H5Fopen(hdfName.c_str(), H5F_ACC_RDWR, h5plist);

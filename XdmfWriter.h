@@ -292,27 +292,32 @@ public:
 		unsigned long *blockedCells = 0L;
 		double *blockedVertices = 0L;
 		unsigned int *blockedPartInfo = 0L;
-		if (m_blockBuffer.isInitialized() && m_timestep == 0) {
+		if (m_blockBuffer.isInitialized()) {
 			numCells = m_blockBuffer.count();
-			blockedCells = new unsigned long[numCells * 4];
-			m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, 4, blockedCells);
+
+			if (m_timestep == 0) {
+				// Cells, vertices and partition info only needs to be exchanged
+				// when creating a new file
+				blockedCells = new unsigned long[numCells * 4];
+				m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, 4, blockedCells);
 
 
-			blockedVertices = m_blockBuffer.exchangeAny(vertices, MPI_DOUBLE, 3,
-					numVertices, numVertices);
+				blockedVertices = m_blockBuffer.exchangeAny(vertices, MPI_DOUBLE, 3,
+						numVertices, numVertices);
 
-			if (numCells > 0)
-				blockedPartInfo = new unsigned int[numCells * 4];
-			m_blockBuffer.exchange(partInfo, MPI_UNSIGNED, 1, blockedPartInfo);
+				if (numCells > 0)
+					blockedPartInfo = new unsigned int[numCells * 4];
+				m_blockBuffer.exchange(partInfo, MPI_UNSIGNED, 1, blockedPartInfo);
 
-			// Overwrite pointers
-			delete [] h5Cells;
-			h5Cells = blockedCells;
+				// Overwrite pointers
+				delete [] h5Cells;
+				h5Cells = blockedCells;
 
-			vertices = blockedVertices;
+				vertices = blockedVertices;
 
-			delete [] partInfo;
-			partInfo = blockedPartInfo;
+				delete [] partInfo;
+				partInfo = blockedPartInfo;
+			}
 
 			// Allocate memory for data exchange
 			if (numCells > 0)

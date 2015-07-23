@@ -316,7 +316,7 @@ public:
 	/**
 	 * @return The list of the global identifiers after filtering
 	 */
-	const unsigned long* globalIds()
+	const unsigned long* globalIds() const
 	{
 		return m_globalIds;
 	}
@@ -324,7 +324,7 @@ public:
 	/**
 	 * @return Number of vertices this process is responsible for after filtering
 	 */
-	unsigned int numLocalVertices()
+	unsigned int numLocalVertices() const
 	{
 		return m_numLocalVertices;
 	}
@@ -332,7 +332,7 @@ public:
 	/**
 	 * @return The list of vertices this process is responsible for after filtering
 	 */
-	const double* localVertices()
+	const double* localVertices() const
 	{
 		return m_localVertices;
 	}

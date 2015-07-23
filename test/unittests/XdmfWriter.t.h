@@ -73,7 +73,31 @@ public:
 		for (unsigned int i = 0; i < 5*3; i++)
 			m_vertices[i] = rand() / static_cast<double>(RAND_MAX);
 
+		m_varNames.clear();
 		m_varNames.push_back("a");
+	}
+
+	void testTriangle()
+	{
+		// TODO this currently tests for failures only
+		double data[3];
+
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE> writer0(m_rank, "test", m_varNames);
+		writer0.init(4, m_cells, 5, m_vertices);
+
+		for (int i = 0; i < 5; i++) {
+			setData(i, data);
+
+			writer0.addTimeStep(i);
+			writer0.writeData(0, data);
+		}
+
+		writer0.close();
+
+		if (m_rank == 0) {
+			unlink("test.xdmf");
+			unlink("test.h5");
+		}
 	}
 
 	// Test append mode
@@ -81,7 +105,25 @@ public:
 	{
 		double data[3];
 
-		XdmfWriter writer1(m_rank, "test", m_varNames);
+		// TODO this currently tests failures only
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE> writer0(m_rank, "test", m_varNames);
+		writer0.init(4, m_cells, 5, m_vertices);
+
+		for (int i = 0; i < 5; i++) {
+			setData(i, data);
+
+			writer0.addTimeStep(i);
+			writer0.writeData(0, data);
+		}
+
+		writer0.close();
+
+		if (m_rank == 0) {
+			unlink("test.xdmf");
+			unlink("test.h5");
+		}
+
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer1(m_rank, "test", m_varNames);
 		writer1.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
@@ -98,7 +140,7 @@ public:
 		}
 		writer1.close();
 
-		XdmfWriter writer2a(m_rank, "test", m_varNames);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer2a(m_rank, "test", m_varNames);
 		writer2a.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 3; i++) {
@@ -109,7 +151,7 @@ public:
 		}
 		writer2a.close();
 
-		XdmfWriter writer2b(m_rank, "test", m_varNames, 3);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer2b(m_rank, "test", m_varNames, 3);
 		writer2b.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 3; i < 5; i++) {

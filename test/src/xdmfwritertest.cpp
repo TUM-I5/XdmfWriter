@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
 	variables.push_back("var1");
 	variables.push_back("var2");
 
-	XdmfWriter writer(rank, argv[1], variables);
+	xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer(rank, argv[1], variables);
 
 	srand(rank*1000);
 

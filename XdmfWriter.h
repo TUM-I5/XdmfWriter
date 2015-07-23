@@ -66,11 +66,25 @@
 #include "BlockBufferSerial.h"
 #endif // PARALLEL
 
+namespace xdmfwriter
+{
+
+/**
+ * The topology types
+ */
+enum TopoType {
+	TRIANGLE,
+	TETRAHEDRON
+};
+
 /**
  * Writes data in XDMF format
  */
+template<enum TopoType>
 class XdmfWriter
 {
+public:
+
 private:
 #ifdef PARALLEL
 	MPI_Comm m_comm;
@@ -190,13 +204,13 @@ public:
 #endif // PARALLEL
 
 		// Add vertex offset to all cells and convert to unsigned long
-		unsigned long *h5Cells = new unsigned long[numCells * 4];
+		unsigned long *h5Cells = new unsigned long[numCells * topoTypeSize()];
 #ifdef PARALLEL
 		if (useVertexFilter) {
 #ifdef _OPENMP
 			#pragma omp parallel for schedule(static)
 #endif
-			for (size_t i = 0; i < numCells*4; i++)
+			for (size_t i = 0; i < numCells*topoTypeSize(); i++)
 				h5Cells[i] = filter.globalIds()[cells[i]];
 		} else
 #endif // PARALLEL
@@ -204,7 +218,7 @@ public:
 #ifdef _OPENMP
 			#pragma omp parallel for schedule(static)
 #endif
-			for (size_t i = 0; i < numCells*4; i++)
+			for (size_t i = 0; i < numCells*topoTypeSize(); i++)
 				h5Cells[i] = cells[i] + offset;
 		}
 
@@ -219,8 +233,9 @@ public:
 					<< "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>" << std::endl
 					<< "<Xdmf Version=\"2.0\">" << std::endl
 					<< " <Domain>" << std::endl;
-			m_xdmfFile << "  <Topology TopologyType=\"Tetrahedron\" NumberOfElements=\"" << totalSize[0] << "\">" << std::endl
-					<< "   <DataItem NumberType=\"UInt\" Precision=\"8\" Format=\"HDF\" Dimensions=\"" << totalSize[0] << " 4\">"
+			m_xdmfFile << "  <Topology TopologyType=\"" << topoTypeName() << "\" NumberOfElements=\"" << totalSize[0] << "\">" << std::endl
+					<< "   <DataItem NumberType=\"UInt\" Precision=\"8\" Format=\"HDF\" Dimensions=\""
+						<< totalSize[0] << " " << topoTypeSize() << "\">"
 					<< m_hdfFilename << ":/connect"
 					<< "</DataItem>" << std::endl
 					<< "  </Topology>" << std::endl;
@@ -298,15 +313,15 @@ public:
 			if (m_timestep == 0) {
 				// Cells, vertices and partition info only needs to be exchanged
 				// when creating a new file
-				blockedCells = new unsigned long[numCells * 4];
-				m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, 4, blockedCells);
+				blockedCells = new unsigned long[numCells * topoTypeSize()];
+				m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, topoTypeSize(), blockedCells);
 
 
 				blockedVertices = m_blockBuffer.exchangeAny(vertices, MPI_DOUBLE, 3,
 						numVertices, numVertices);
 
 				if (numCells > 0)
-					blockedPartInfo = new unsigned int[numCells * 4];
+					blockedPartInfo = new unsigned int[numCells];
 				m_blockBuffer.exchange(partInfo, MPI_UNSIGNED, 1, blockedPartInfo);
 
 				// Overwrite pointers
@@ -380,7 +395,7 @@ public:
 
 			if (m_timestep == 0) {
 				// Create connect dataset
-				hsize_t connectDims[2] = {totalSize[0], 4};
+				hsize_t connectDims[2] = {totalSize[0], topoTypeSize()};
 				hid_t h5ConnectSpace = H5Screate_simple(2, connectDims, 0L);
 				checkH5Err(h5ConnectSpace);
 				hid_t h5Connect = H5Dcreate(m_hdfFile, "/connect", H5T_STD_U64LE, h5ConnectSpace,
@@ -434,7 +449,7 @@ public:
 
 				// Write connectivity
 				hsize_t connectWriteStart[2] = {offsets[0], 0};
-				hsize_t connectWriteCount[2] = {numCells, 4};
+				hsize_t connectWriteCount[2] = {numCells, topoTypeSize()};
 				hid_t h5MemSpace = H5Screate_simple(2, connectWriteCount, 0L);
 				checkH5Err(h5MemSpace);
 				checkH5Err(H5Sselect_hyperslab(h5ConnectSpace, H5S_SELECT_SET, connectWriteStart, 0L, connectWriteCount, 0L));
@@ -649,6 +664,17 @@ private:
 	}
 
 	/**
+	 * @return Name of the topology type in the XDMF file
+	 */
+	const char* topoTypeName() const;
+
+	/**
+	 * @return Number of vertices of the topology type
+	 */
+	unsigned int topoTypeSize() const;
+
+private:
+	/**
 	 * Write the beginning of a time step to the stream
 	 */
 	static void timeStepStartXdmf(unsigned int timestep, std::ostream &s)
@@ -667,5 +693,31 @@ private:
 private:
 	static const unsigned int MAX_TIMESTEP_SPACE = 12;
 };
+
+template<> inline
+const char* XdmfWriter<TRIANGLE>::topoTypeName() const
+{
+	return "Triangle";
+}
+
+template<> inline
+const char* XdmfWriter<TETRAHEDRON>::topoTypeName() const
+{
+	return "Tetrahedron";
+}
+
+template<> inline
+unsigned int XdmfWriter<TRIANGLE>::topoTypeSize() const
+{
+	return 3;
+}
+
+template<> inline
+unsigned int XdmfWriter<TETRAHEDRON>::topoTypeSize() const
+{
+	return 4;
+}
+
+}
 
 #endif // XDMF_WRITER_H

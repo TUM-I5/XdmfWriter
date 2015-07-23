@@ -187,6 +187,7 @@ public:
 		if (m_rank == 0) {
 			unlink("test.xdmf");
 			unlink("test.h5");
+			unlink("test.h5.bak");
 			unlink("test1.xdmf");
 			unlink("test1.h5");
 		}

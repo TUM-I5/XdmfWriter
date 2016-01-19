@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2016, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -182,6 +182,16 @@ public:
 #endif // USE_HDF
 	}
 
+#ifdef PARALLEL
+	/**
+	 * Sets the communicator that should be used. Default is MPI_COMM_WORLD.
+	 */
+	void setComm(MPI_Comm comm)
+	{
+		m_comm = comm;
+	}
+#endif // PARALLEL
+
 	void init(unsigned int numCells, const unsigned int* cells, unsigned int numVertices, const double *vertices, bool useVertexFilter = true)
 	{
 #ifdef USE_HDF
@@ -198,7 +208,7 @@ public:
 		} else {
 			// No vertex filter -> just get the offset we should at
 			offset = numVertices;
-			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
 			offset -= numVertices;
 		}
 #endif // PARALLEL
@@ -225,7 +235,7 @@ public:
 		// Initialize the XDMF file
 		unsigned long totalSize[2] = {numCells, numVertices};
 #ifdef PARALLEL
-		MPI_Allreduce(MPI_IN_PLACE, totalSize, 2, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE, totalSize, 2, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
 #endif // PARALLEL
 
 		if (m_rank == 0) {
@@ -299,7 +309,9 @@ public:
 		if (blockSize > 1) {
 			m_blockBuffer.init(numCells, MPI_DOUBLE, blockSize);
 
-			MPI_Comm_split(MPI_COMM_WORLD, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &m_comm);
+			MPI_Comm newComm;
+			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &newComm);
+			m_comm = newComm; // We no longer need MPI_COMM_WORLD
 		}
 
 		// Exchange cells and vertices

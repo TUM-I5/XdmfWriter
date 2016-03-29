@@ -83,8 +83,6 @@ enum TopoType {
 template<enum TopoType>
 class XdmfWriter
 {
-public:
-
 private:
 #ifdef PARALLEL
 	MPI_Comm m_comm;
@@ -574,11 +572,12 @@ public:
 			m_xdmfFile << "    <Topology Reference=\"/Xdmf/Domain/Topology[1]\"/>" << std::endl
 					<< "    <Geometry Reference=\"/Xdmf/Domain/Geometry[1]\"/>" << std::endl
 					<< "    <Time Value=\"" << time << "\"/>" << std::endl;
-			m_xdmfFile << "    <Attribute Name= \"partition\" Center=\"Cell\">" << std::endl
-					<< "     <DataItem Reference=\"/Xdmf/Domain/DataItem[1]\"/>" << std::endl
+			m_xdmfFile << "    <Attribute Name=\"partition\" Center=\"Cell\">" << std::endl
+					// Not sure why we need the total cells here but paraview complains otherwise
+					<< "     <DataItem Reference=\"/Xdmf/Domain/DataItem[1]\" Dimensions=\"" << m_totalCells << "\"/>" << std::endl
 					<< "    </Attribute>" << std::endl;
 			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				m_xdmfFile << "    <Attribute Name= \"" << m_variableNames[i] << "\" Center=\"Cell\">" << std::endl
+				m_xdmfFile << "    <Attribute Name=\"" << m_variableNames[i] << "\" Center=\"Cell\">" << std::endl
 						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalCells << "\">" << std::endl
 						<< "      <DataItem NumberType=\"UInt\" Precision=\"8\" Format=\"XML\" Dimensions=\"3 2\">"
 						<< m_timestep << " 0 1 1 1 " << m_totalCells << "</DataItem>" << std::endl

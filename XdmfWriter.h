@@ -161,7 +161,7 @@ public:
 		unsigned int offset = 0;
 #ifdef PARALLEL
 		// Apply vertex filter
-		ParallelVertexFilter filter;
+		ParallelVertexFilter filter(m_comm);
 		if (useVertexFilter) {
 			// Filter duplicate vertices
 			filter.filter(numVertices, vertices);

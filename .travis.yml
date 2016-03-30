@@ -16,6 +16,7 @@ before_script:
 script:
  - cd test/
  - scons parallelization=mpi unitTests=yes check
+ - scons parallelization=mpi hdf5=off unitTests=yes check
 
 after_script:
  - cat config.log

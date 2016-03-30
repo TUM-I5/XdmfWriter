@@ -293,6 +293,11 @@ public:
 	}
 
 public:
+	static const char* format()
+	{
+		return "HDF";
+	}
+
 	/**
 	 * @param prefix
 	 * @param var

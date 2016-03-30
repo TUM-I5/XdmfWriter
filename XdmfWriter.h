@@ -214,24 +214,28 @@ public:
 					<< " <Domain>" << std::endl;
 			m_xdmfFile << "  <Topology TopologyType=\"" << topoTypeName() << "\" NumberOfElements=\"" << totalSize[0] << "\">" << std::endl
 					// This should be UInt but for some reason this does not work with binary data
-					<< "   <DataItem NumberType=\"Int\" Precision=\"8\" Format=\"HDF\" Dimensions=\""
+					<< "   <DataItem NumberType=\"Int\" Precision=\"8\" Format=\""
+						<< backends::Backend::format() << "\" Dimensions=\""
 						<< totalSize[0] << " " << topoTypeSize() << "\">"
 					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "connect")
 					<< "</DataItem>" << std::endl
 					<< "  </Topology>" << std::endl;
 			m_xdmfFile << "  <Geometry name=\"geo\" GeometryType=\"XYZ\" NumberOfElements=\"" << totalSize[1] << "\">" << std::endl
-					<< "   <DataItem NumberType=\"Float\" Precision=\"8\" Format=\"HDF\" Dimensions=\"" << totalSize[1] << " 3\">"
+					<< "   <DataItem NumberType=\"Float\" Precision=\"8\" Format=\""
+						<< backends::Backend::format() << "\" Dimensions=\"" << totalSize[1] << " 3\">"
 					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "geometry")
 					<< "</DataItem>" << std::endl
 					<< "  </Geometry>" << std::endl;
 
-			m_xdmfFile << "  <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"HDF\" Dimensions=\"" << totalSize[0] << "\">"
+			m_xdmfFile << "  <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\""
+						<< backends::Backend::format() << "\" Dimensions=\"" << totalSize[0] << "\">"
 					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "partition")
 					<< "</DataItem>" << std::endl;
 
 			m_timeDimPos = new size_t[m_variableNames.size()];
 			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				m_xdmfFile << "  <DataItem NumberType=\"Float\" Precision=\"8\" Format=\"HDF\" Dimensions=\"";
+				m_xdmfFile << "  <DataItem NumberType=\"Float\" Precision=\"8\" Format=\""
+						<< backends::Backend::format() << "\" Dimensions=\"";
 				m_timeDimPos[i] = m_xdmfFile.tellp();
 				m_xdmfFile << std::setw(MAX_TIMESTEP_SPACE) << m_timestep << ' ' << totalSize[0] << "\">"
 						<< backends::Backend::dataItemLocation(backendPrefix.c_str(), m_variableNames[i])

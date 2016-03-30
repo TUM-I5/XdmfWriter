@@ -154,6 +154,11 @@ public:
 	}
 
 public:
+	static const char* format()
+	{
+		return "Binary";
+	}
+
 	/**
 	 * @param prefix
 	 * @param var

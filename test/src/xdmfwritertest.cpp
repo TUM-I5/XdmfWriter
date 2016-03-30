@@ -34,7 +34,9 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef PARALLEL
 #include <mpi.h>
+#endif // PARALLEL
 
 #include "XdmfWriter.h"
 #include "utils/logger.h"
@@ -51,11 +53,14 @@ static int rand_max(int max)
 
 int main(int argc, char* argv[])
 {
+#ifdef PARALLEL
 	MPI_Init(&argc, &argv);
+#endif // PARALLEL
 
-	int rank, numProcs;
-	MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
+	int rank = 0;
+#ifdef PARALLEL
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#endif // PARALLEL
 
 	std::vector<const char*> variables;
 	variables.push_back("var1");
@@ -85,8 +90,10 @@ int main(int argc, char* argv[])
 	double *data = new double[numCells];
 
 	for (unsigned int i = 0; i < 20; i++) {
+#ifdef PARALLEL
 		// Synchronize to measure performance of writing a time step
 		MPI_Barrier(MPI_COMM_WORLD);
+#endif // PARALLEL
 
 		logInfo(rank) << "Adding time step" << i << "to the output file";
 
@@ -107,6 +114,8 @@ int main(int argc, char* argv[])
 	delete [] cells;
 	delete [] vertices;
 
+#ifdef PARALLEL
 	MPI_Finalize();
+#endif // PARALLEL
 	return 0;
 }

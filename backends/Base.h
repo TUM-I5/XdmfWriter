@@ -37,7 +37,9 @@
 #ifndef XDMF_WRITER_BACKENDS_BASE_H
 #define XDMF_WRITER_BACKENDS_BASE_H
 
+#ifdef PARALLEL
 #include <mpi.h>
+#endif // PARALLEL
 
 #include <string>
 

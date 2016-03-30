@@ -53,8 +53,8 @@ vars.AddVariables(
                 allowed_values=('debug', 'release')
               ),
 
-  EnumVariable( 'parallelization', 'level of parallelization', 'mpi',
-                allowed_values=('mpi',)
+  EnumVariable( 'parallelization', 'level of parallelization', 'none',
+                allowed_values=('none', 'mpi')
               ),
                   
   BoolVariable( 'hdf5', 'use HDF5',

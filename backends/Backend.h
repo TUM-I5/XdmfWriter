@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2016, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -34,23 +34,29 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef EPIK_WRAPPER_H
-#define EPIK_WRAPPER_H
+#ifndef XDMF_WRITER_BACKENDS_BACKEND_H
+#define XDMF_WRITER_BACKENDS_BACKEND_H
 
-/**
- * Manual instrumentation for Scalasca with epik.
- * Override function calls if not compiled with EPIK.
- */
-#ifdef EPIK
-#include "epik_user.h"
-#else
-#define EPIK_FUNC_REG(str)
-#define EPIK_FUNC_START()
-#define EPIK_FUNC_END()
-#define EPIK_USER_REG(id,str)
-#define EPIK_USER_START(id)
-#define EPIK_USER_END(id)
-#define EPIK_TRACER(str)
-#endif
+#ifdef USE_HDF
+#include "HDF5.h"
+#else // USE_HDF
+#include "Posix.h"
+#endif // USE_HDF
 
-#endif // EPIK_WRAPPER_H
+namespace xdmfwriter
+{
+
+namespace backends
+{
+
+#ifdef USE_HDF
+typedef HDF5 Backend;
+#else // USE_HDF
+typedef Posix Backend;
+#endif // USE_HDF
+
+}
+
+}
+
+#endif // XDMF_WRITER_BACKENDS_BACKEND_H

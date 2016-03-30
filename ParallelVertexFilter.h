@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2016, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
 
 #include "utils/logger.h"
 
-#include "epik_wrapper.h"
+#include "scorep_wrapper.h"
 
 /**
  * Filters duplicate vertices in parallel
@@ -124,7 +124,7 @@ public:
 	 */
 	void filter(unsigned int numVertices, const double *vertices)
 	{
-		EPIK_TRACER("ParallelVertexFilter_Filter");
+		SCOREP_USER_REGION("ParallelVertexFilter_Filter", SCOREP_USER_REGION_TYPE_FUNCTION);
 
 		// Chop the last 4 bits to avoid numerical errors
 		double *roundVertices = new double[numVertices*3];

@@ -188,8 +188,8 @@ public:
 				checkH5Err(m_hdfVars[i]);
 
 				checkH5Err(H5Sclose(h5VarSpace));
-				checkH5Err(H5Pclose(h5pCreate));
 			}
+			checkH5Err(H5Pclose(h5pCreate));
 
 			// Write connectivity
 			hsize_t connectWriteStart[2] = {offset[0], 0};

@@ -83,6 +83,8 @@ public:
 	{
 		double data[5][4];
 
+		m_varNames.push_back("b");
+
 		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE> writer0(m_rank, "test", m_varNames);
 		writer0.init(4, m_cells, 5, m_vertices);
 
@@ -91,6 +93,7 @@ public:
 
 			writer0.addTimeStep(i);
 			writer0.writeData(0, data[i]);
+			writer0.writeData(1, data[i]);
 		}
 
 		writer0.close();
@@ -226,7 +229,7 @@ private:
 #ifdef USE_HDF
 		const char* files[1] = {".h5"};
 #else // USE_HDF
-		const char* files[4] = {"_connect.bin", "_geometry.bin", "_partition.bin", "_a.bin"};
+		const char* files[5] = {"_connect.bin", "_geometry.bin", "_partition.bin", "_a.bin", "_b.bin"};
 #endif // USE_HDF
 
 		const unsigned int numFiles = sizeof(files)/sizeof(const char*);

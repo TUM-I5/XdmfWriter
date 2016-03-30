@@ -208,11 +208,10 @@ env.sourceFiles = []
 
 Export('env')
 SConscript('src/SConscript', variant_dir='#/'+env['buildDir'], duplicate=0)
-SConscript('../SConscript', variant_dir='#/'+env['buildDir']+'/lib', duplicate=0)
 Import('env')
 
 # build executable version
-env.Program('#/'+env['execFile'], env.sourceFiles+env.XdmfWriterSourceFiles)
+env.Program('#/'+env['execFile'], env.sourceFiles)
 
 # build unit tests
 if env['unitTests']:
@@ -246,4 +245,4 @@ if env['unitTests']:
 
     # build unit tests
     env.CxxTest(target='#/'+env['buildDir']+'/unittests/cxxtest_runner',
-                source=env.XdmfWriterSourceFiles+env.testSourceFiles)
+                source=env.testSourceFiles)

@@ -100,6 +100,9 @@ private:
 	/** Local vertices after filtering */
 	double *m_localVertices;
 
+	/** MPI data type consisting of three doubles */
+	MPI_Datatype m_vertexType;
+
 public:
 	ParallelVertexFilter(MPI_Comm comm = MPI_COMM_WORLD)
 		: m_comm(comm), m_globalIds(0L), m_numLocalVertices(0), m_localVertices(0L)
@@ -107,16 +110,16 @@ public:
 		MPI_Comm_rank(comm, &m_rank);
 		MPI_Comm_size(comm, &m_numProcs);
 
-		if (vertexType == MPI_DATATYPE_NULL) {
-			MPI_Type_contiguous(3, MPI_DOUBLE, &vertexType);
-			MPI_Type_commit(&vertexType);
-		}
+		MPI_Type_contiguous(3, MPI_DOUBLE, &m_vertexType);
+		MPI_Type_commit(&m_vertexType);
 	}
 
 	virtual ~ParallelVertexFilter()
 	{
 		delete [] m_globalIds;
 		delete [] m_localVertices;
+
+		MPI_Type_free(&m_vertexType);
 	}
 
 	/**
@@ -238,7 +241,7 @@ public:
 			sDispls[i] = sDispls[i-1] + bucketSize[i-1];
 			rDispls[i] = rDispls[i-1] + recvSize[i-1];
 		}
-		MPI_Alltoallv(sendVertices, bucketSize, sDispls, vertexType, sortVertices, recvSize, rDispls, vertexType, m_comm);
+		MPI_Alltoallv(sendVertices, bucketSize, sDispls, m_vertexType, sortVertices, recvSize, rDispls, m_vertexType, m_comm);
 
 		delete [] sendVertices;
 
@@ -407,9 +410,6 @@ private:
 		       && vertexA[1] == vertexB[1]
 		       && vertexA[2] == vertexB[2];
 	}
-
-	/** MPI data type consisting of three doubles */
-	static MPI_Datatype vertexType;
 
 	/** The total buckets we create is <code>BUCKETS_PER_RANK * numProcs</code> */
 	const static int BUCKETS_PER_RANK = 8;

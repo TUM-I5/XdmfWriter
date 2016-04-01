@@ -192,7 +192,7 @@ private:
 
 		const char* buf = reinterpret_cast<const char*>(buffer);
 		while (size > 0) {
-			unsigned long written = ::write(fh, buf, size);
+			ssize_t written = ::write(fh, buf, size);
 			if (written <= 0)
 				checkErr(written, size);
 			buf += written;

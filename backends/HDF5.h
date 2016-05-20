@@ -41,7 +41,12 @@
 
 #include <hdf5.h>
 
+#include "utils/env.h"
+
 #include "Base.h"
+#ifdef PARALLEL
+#include "MPIInfo.h"
+#endif // PARALLEL
 
 namespace xdmfwriter
 {
@@ -105,7 +110,7 @@ public:
 		if (align > 0)
 			checkH5Err(H5Pset_alignment(h5plist, 1, align));
 #ifdef PARALLEL
-		checkH5Err(H5Pset_fapl_mpio(h5plist, comm(), MPI_INFO_NULL));
+		checkH5Err(H5Pset_fapl_mpio(h5plist, comm(), MPIInfo::get()));
 #endif // PARALLEL
 
 		// Assemble filename

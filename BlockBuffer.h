@@ -53,6 +53,9 @@
 class BlockBuffer
 {
 private:
+	/** The communicator that should be used */
+	MPI_Comm m_comm;
+
 	/** Our rank */
 	int m_rank;
 
@@ -85,8 +88,8 @@ private:
 
 public:
 	BlockBuffer()
-		: m_rank(-1), m_type(MPI_DATATYPE_NULL), m_extent(0), m_inCount(0), m_sendRank(0),
-		  m_sendCount(0), m_recvRanks(0), m_recvCounts(0L), m_outCount(1), m_requests(0L)
+		: m_comm(MPI_COMM_NULL), m_rank(-1), m_type(MPI_DATATYPE_NULL), m_extent(0), m_inCount(0),
+		  m_sendRank(0), m_sendCount(0), m_recvRanks(0), m_recvCounts(0L), m_outCount(1), m_requests(0L)
 	{
 	}
 
@@ -100,9 +103,10 @@ public:
 	 * @param dataType The MPI data type of the elements
 	 * @param blockSize The size of the blocks that should be created (in bytes)
 	 */
-	void init(unsigned int inCount, MPI_Datatype dataType, unsigned long blockSize)
+	void init(MPI_Comm comm, unsigned int inCount, MPI_Datatype dataType, unsigned long blockSize)
 	{
-		MPI_Comm_rank(MPI_COMM_WORLD, &m_rank);
+		m_comm = comm;
+		MPI_Comm_rank(comm, &m_rank);
 
 		MPI_Aint lb;
 		MPI_Type_get_extent(dataType, &lb, &m_extent);
@@ -113,7 +117,7 @@ public:
 
 		unsigned long localSize = inCount * m_extent;
 		unsigned long localStart;
-		MPI_Scan(&localSize, &localStart, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+		MPI_Scan(&localSize, &localStart, 1, MPI_UNSIGNED_LONG, MPI_SUM, comm);
 		localStart -= localSize;
 
 		// Determine what we need to send, what is ours and what we receive
@@ -131,10 +135,10 @@ public:
 
 		// Compute all the ranks, from which we receive and to which we send
 		int numProcs;
-		MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
+		MPI_Comm_size(comm, &numProcs);
 
 		unsigned int *blocks = new unsigned int[numProcs];
-		MPI_Allgather(&localBlocks, 1, MPI_UNSIGNED, blocks, 1, MPI_UNSIGNED, MPI_COMM_WORLD);
+		MPI_Allgather(&localBlocks, 1, MPI_UNSIGNED, blocks, 1, MPI_UNSIGNED, comm);
 
 		m_sendRank = m_rank-1;
 		if (m_rank > 0) {
@@ -164,10 +168,10 @@ public:
 			m_requests[0] = MPI_REQUEST_NULL;
 		else
 			MPI_Isend(&m_sendCount, 1, MPI_UNSIGNED, m_sendRank, 0,
-					MPI_COMM_WORLD, &m_requests[0]);
+					comm, &m_requests[0]);
 		for (unsigned int i = 0; i < m_recvRanks; i++)
 			MPI_Irecv(&m_recvCounts[i], 1, MPI_UNSIGNED, m_rank+i+1, 0,
-					MPI_COMM_WORLD, &m_requests[i+1]);
+					comm, &m_requests[i+1]);
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE); // Important: This sets all requests to MPI_REQEUST_NULL
 
 		// Compute how many elements we are responsible for
@@ -247,13 +251,13 @@ public:
 		for (unsigned int i = 0; i < m_recvRanks; i++) {
 			if (m_recvCounts[i] > 0)
 				MPI_Irecv(&recvCounts[i], 1, MPI_UNSIGNED, m_rank+i+1, 0,
-						MPI_COMM_WORLD, &m_requests[i+1]);
+						m_comm, &m_requests[i+1]);
 		}
 
 		// Send size
 		unsigned int sendCount = (m_outCount > 0 ? 0 : elemIn); // Send elements if we don't own any
 		if (m_sendCount > 0)
-			MPI_Isend(&sendCount, 1, MPI_UNSIGNED, m_sendRank, 0, MPI_COMM_WORLD, &m_requests[0]);
+			MPI_Isend(&sendCount, 1, MPI_UNSIGNED, m_sendRank, 0, m_comm, &m_requests[0]);
 
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
 
@@ -271,7 +275,7 @@ public:
 		for (unsigned int i = 0; i < m_recvRanks; i++) {
 			if (recvCounts[i] > 0) {
 				MPI_Irecv(buf+elemOffset*extent, recvCounts[i]*count, type,
-						m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
+						m_rank+i+1, 0, m_comm, &m_requests[i+1]);
 				elemOffset += recvCounts[i];
 			}
 		}
@@ -279,7 +283,7 @@ public:
 		// Send elements or copy
 		if (sendCount > 0)
 			MPI_Isend(const_cast<T*>(in), sendCount*count, type, m_sendRank, 0,
-					MPI_COMM_WORLD, &m_requests[0]);
+					m_comm, &m_requests[0]);
 		else
 			memcpy(buf, in, elemIn*extent);
 
@@ -302,7 +306,7 @@ private:
 		for (unsigned int i = 0; i < m_recvRanks; i++) {
 			if (m_recvCounts[i] > 0) {
 				MPI_Irecv(static_cast<uint8_t*>(out)+elemOffset*extent,
-						m_recvCounts[i]*count, type, m_rank+i+1, 0, MPI_COMM_WORLD, &m_requests[i+1]);
+						m_recvCounts[i]*count, type, m_rank+i+1, 0, m_comm, &m_requests[i+1]);
 				elemOffset += m_recvCounts[i];
 			}
 		}
@@ -310,7 +314,7 @@ private:
 		// Send first elements
 		if (m_sendCount > 0)
 			MPI_Isend(const_cast<void*>(in), m_sendCount*count, type, m_sendRank, 0,
-					MPI_COMM_WORLD, &m_requests[0]);
+					m_comm, &m_requests[0]);
 
 		// Copy local elements
 		memcpy(out, static_cast<const uint8_t*>(in)+m_sendCount*extent,

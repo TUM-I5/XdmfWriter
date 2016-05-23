@@ -281,7 +281,7 @@ public:
 		// Create block buffer
 		unsigned long blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
 		if (blockSize > 1) {
-			m_blockBuffer.init(numCells, MPI_DOUBLE, blockSize);
+			m_blockBuffer.init(m_comm, numCells, MPI_DOUBLE, blockSize);
 
 			MPI_Comm newComm;
 			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &newComm);

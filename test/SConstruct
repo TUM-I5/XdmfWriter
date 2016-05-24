@@ -189,10 +189,8 @@ env.Tool('PrefixPathTool')
 #
 if env['hdf5']:
     # HDF5
-    env.Tool('Hdf5Tool', required=True)
+    env.Tool('Hdf5Tool', required=True, parallel=(env['parallelization'] in ['mpi']))
     env.Append(CPPDEFINES=['USE_HDF'])
-    # Fix some issues on Ubuntu
-    env.Append(CPPDEFINES=['H5Dcreate_vers=2', 'H5Dopen_vers=2'])
 
 #
 # setup the library name and the build directory

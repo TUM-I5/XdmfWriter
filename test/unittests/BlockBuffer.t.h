@@ -53,9 +53,9 @@ public:
 	{
 		MPI_Comm_rank(MPI_COMM_WORLD, &m_rank);
 
-		m_blockBuffer0.init((m_rank+1)*10, MPI_DOUBLE, sizeof(double)*8);
+		m_blockBuffer0.init(MPI_COMM_WORLD, (m_rank+1)*10, MPI_DOUBLE, sizeof(double)*8);
 
-		m_blockBuffer1.init(5, MPI_DOUBLE, sizeof(double)*20);
+		m_blockBuffer1.init(MPI_COMM_WORLD, 5, MPI_DOUBLE, sizeof(double)*20);
 	}
 
 	void testIsInitialized()

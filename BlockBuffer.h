@@ -99,7 +99,8 @@ public:
 	}
 
 	/**
-	 * @param nLocalElements The number of elements in the local buffer
+	 * @param comm The MPI communicator
+	 * @param inCount The number of elements in the local buffer
 	 * @param dataType The MPI data type of the elements
 	 * @param blockSize The size of the blocks that should be created (in bytes)
 	 */

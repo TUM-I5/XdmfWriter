@@ -253,20 +253,20 @@ public:
 		unsigned int *sortSortIndices = new unsigned int[numSortVertices];
 		createSortedIndices(roundVertices, numSortVertices, sortSortIndices);
 
-		delete [] roundVertices;
-
 		// Initialize the global ids we send back to the other processors
 		unsigned long *gids = new unsigned long[numSortVertices];
 
 		if (numSortVertices > 0) {
 			gids[sortSortIndices[0]] = 0;
 			for (unsigned int i = 1; i < numSortVertices; i++) {
-				if (equals(&sortVertices[sortSortIndices[i-1]*3], &sortVertices[sortSortIndices[i]*3]))
+				if (equals(&roundVertices[sortSortIndices[i-1]*3], &roundVertices[sortSortIndices[i]*3]))
 					gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]];
 				else
 					gids[sortSortIndices[i]] = gids[sortSortIndices[i-1]] + 1;
 			}
 		}
+
+		delete [] roundVertices;
 
 		// Create the local vertices list
 		if (numSortVertices > 0)
@@ -350,7 +350,7 @@ private:
 	 */
 	static double removeRoundError(double value)
 	{
-		static const uint64_t mask = ~0xF;
+		static const uint64_t mask = ~0xFF;
 
 		union FloatUnion {
 			double f;

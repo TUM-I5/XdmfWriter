@@ -134,6 +134,59 @@ public:
 		TS_ASSERT_EQUALS(sumVertices, totalVertices);
 	}
 
+	/**
+	 * Test filter with similar vertices
+	 */
+	void testFilterSimilar()
+	{
+		int rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		double random_vertices[sizeof(RANDOM_VALUES)];
+		memcpy(random_vertices, RANDOM_VALUES, sizeof(RANDOM_VALUES));
+
+		memcpy(&random_vertices[4*3], &random_vertices[8*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[4*3] &= ~0xF;
+		memcpy(&random_vertices[10*3], &random_vertices[8*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[10*3] |= 0xF;
+		memcpy(&random_vertices[1*3], &random_vertices[14*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[14*3+1] |= 0xF;
+		memcpy(&random_vertices[6*3], &random_vertices[15*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[15*3+2] |= 0xF;
+
+		const unsigned int totalVertices = 6*3 - 4;
+
+		double vertices[6*3];
+		for (unsigned int i = 0; i < 6*3; i++)
+			vertices[i] = random_vertices[i+6*3*rank];
+
+		ParallelVertexFilter filter;
+		filter.filter(6, vertices);
+
+		// Get the global ids
+		unsigned long globalIds[6*3];
+		MPI_Gather(const_cast<unsigned long*>(filter.globalIds()), 6, MPI_UNSIGNED_LONG,
+				globalIds, 6, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+		// See testFilterUnique why we are not using MPI_Allgather here
+		MPI_Bcast(globalIds, 6*3, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+		// Sort the vertices according to the global id array
+		double sortedVertices[6*3*3];
+		memset(sortedVertices, 0, sizeof(double)*6*3*3);
+		for (unsigned int i = 0; i < 6*3; i++) {
+			memcpy(&sortedVertices[globalIds[i]*3], &random_vertices[i*3], sizeof(double)*3);
+		}
+
+		for (unsigned int i = 1; i < totalVertices; i++) {
+			//logInfo() << rank << sortedVertices[(i-1)*3] << sortedVertices[i*3];
+			TS_ASSERT(lessEqual(&sortedVertices[(i-1)*3], &sortedVertices[i*3]));
+		}
+
+		unsigned int sumVertices = filter.numLocalVertices();
+		MPI_Allreduce(MPI_IN_PLACE, &sumVertices, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+		TS_ASSERT_EQUALS(sumVertices, totalVertices);
+	}
+
 private:
 	static bool lessEqual(const double* vertexA, const double* vertexB)
 	{

@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -59,11 +59,8 @@ private:
 	/** Our rank */
 	int m_rank;
 
-	/** The basic data type */
-	MPI_Datatype m_type;
-
 	/** Size of the data type */
-	MPI_Aint m_extent;
+	unsigned int m_extent;
 
 	/** Number of elements before the exchange */
 	unsigned int m_inCount;
@@ -88,7 +85,7 @@ private:
 
 public:
 	BlockBuffer()
-		: m_comm(MPI_COMM_NULL), m_rank(-1), m_type(MPI_DATATYPE_NULL), m_extent(0), m_inCount(0),
+		: m_comm(MPI_COMM_NULL), m_rank(-1), m_extent(0), m_inCount(0),
 		  m_sendRank(0), m_sendCount(0), m_recvRanks(0), m_recvCounts(0L), m_outCount(1), m_requests(0L)
 	{
 	}
@@ -101,17 +98,15 @@ public:
 	/**
 	 * @param comm The MPI communicator
 	 * @param inCount The number of elements in the local buffer
-	 * @param dataType The MPI data type of the elements
+	 * @param elemSize The size of a single element (in bytes)
 	 * @param blockSize The size of the blocks that should be created (in bytes)
 	 */
-	void init(MPI_Comm comm, unsigned int inCount, MPI_Datatype dataType, unsigned long blockSize)
+	void init(MPI_Comm comm, unsigned int inCount, unsigned int elemSize, unsigned long blockSize)
 	{
 		m_comm = comm;
 		MPI_Comm_rank(comm, &m_rank);
 
-		MPI_Aint lb;
-		MPI_Type_get_extent(dataType, &lb, &m_extent);
-		m_type = dataType;
+		m_extent = elemSize;
 
 		if (blockSize % m_extent != 0)
 			logError() << "The block size must be a multiple of the data type size";
@@ -201,18 +196,6 @@ public:
 	}
 
 	/**
-	 * Exchanges the data according to the configuration
-	 *
-	 * @in The local data before the exchange.
-	 * @out The local data after the exchange. The caller is responsible
-	 *  for allocating this buffer.
-	 */
-	void exchange(const void* in, void* out)
-	{
-		_exchange(in, m_type, m_extent, 1, out);
-	}
-
-	/**
 	 * Does the same as <code>exchange(void*, void*)</code> but creates block of
 	 * a continues type <code>type</code> with <code>count</code> elements.
 	 * The resulting block have the size type * count / orig_type * orig_block_size.
@@ -222,8 +205,28 @@ public:
 		MPI_Aint lb;
 		MPI_Aint extent;
 		MPI_Type_get_extent(type, &lb, &extent);
+		extent *= count;
 
-		_exchange(in, type, extent, count, out);
+		// Recv elements
+		unsigned int elemOffset = m_inCount-m_sendCount;
+		for (unsigned int i = 0; i < m_recvRanks; i++) {
+			if (m_recvCounts[i] > 0) {
+				MPI_Irecv(static_cast<uint8_t*>(out)+elemOffset*extent,
+						m_recvCounts[i]*count, type, m_rank+i+1, 0, m_comm, &m_requests[i+1]);
+				elemOffset += m_recvCounts[i];
+			}
+		}
+
+		// Send first elements
+		if (m_sendCount > 0)
+			MPI_Isend(const_cast<void*>(in), m_sendCount*count, type, m_sendRank, 0,
+					m_comm, &m_requests[0]);
+
+		// Copy local elements
+		memcpy(out, static_cast<const uint8_t*>(in)+m_sendCount*extent,
+				(m_inCount-m_sendCount)*extent);
+
+		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
 	}
 
 	/**
@@ -291,37 +294,6 @@ public:
 		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
 
 		return reinterpret_cast<T*>(buf);
-	}
-
-private:
-	/**
-	 * @param extent Extent of a single element
-	 * @param count Number of elements
-	 */
-	void _exchange(const void* in, MPI_Datatype type, MPI_Aint extent, unsigned int count, void* out)
-	{
-		extent *= count;
-
-		// Recv elements
-		unsigned int elemOffset = m_inCount-m_sendCount;
-		for (unsigned int i = 0; i < m_recvRanks; i++) {
-			if (m_recvCounts[i] > 0) {
-				MPI_Irecv(static_cast<uint8_t*>(out)+elemOffset*extent,
-						m_recvCounts[i]*count, type, m_rank+i+1, 0, m_comm, &m_requests[i+1]);
-				elemOffset += m_recvCounts[i];
-			}
-		}
-
-		// Send first elements
-		if (m_sendCount > 0)
-			MPI_Isend(const_cast<void*>(in), m_sendCount*count, type, m_sendRank, 0,
-					m_comm, &m_requests[0]);
-
-		// Copy local elements
-		memcpy(out, static_cast<const uint8_t*>(in)+m_sendCount*extent,
-				(m_inCount-m_sendCount)*extent);
-
-		MPI_Waitall(m_recvRanks+1, m_requests, MPI_STATUSES_IGNORE);
 	}
 
 public:

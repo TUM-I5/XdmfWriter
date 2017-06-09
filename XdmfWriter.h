@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2016, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -34,57 +34,42 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef XDMF_WRITER_H
-#define XDMF_WRITER_H
+#ifndef XDMFWRITER_XDMFWRITER_H
+#define XDMFWRITER_XDMFWRITER_H
 
-#ifdef PARALLEL
+#ifdef USE_MPI
 #include <mpi.h>
-#endif // PARALLEL
+#endif // USE_MPI
 
-#include <cstdio>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <unistd.h>
-#include <sys/stat.h>
-
-#ifdef USE_HDF
-#endif // USE_HDF
 
 #include "utils/env.h"
+#include "utils/logger.h"
 
 #include "scorep_wrapper.h"
-#ifdef PARALLEL
-#include "BlockBuffer.h"
+#include "BufferFilter.h"
 #include "ParallelVertexFilter.h"
-#else // PARALLEL
-#include "BlockBufferSerial.h"
-#endif // PARALLEL
+#include "Topology.h"
 #include "backends/Backend.h"
 
 namespace xdmfwriter
 {
 
 /**
- * The topology types
- */
-enum TopoType {
-	TRIANGLE,
-	TETRAHEDRON
-};
-
-/**
  * Writes data in XDMF format
  */
-template<enum TopoType>
+template<TopoType Topo, typename T>
 class XdmfWriter
 {
 private:
-#ifdef PARALLEL
+#ifdef USE_MPI
 	MPI_Comm m_comm;
-#endif // PARALLEL
+#endif // USE_MPI
 
 	int m_rank;
 
@@ -93,173 +78,153 @@ private:
 	std::fstream m_xdmfFile;
 
 	/** The backend for large scale I/O */
-	backends::Backend m_backend;
+	backends::Backend<T> m_backend;
 
-	/** Names of the variables that should be written */
-	const std::vector<const char*> m_variableNames;
+	/** Names of the cell variables that should be written */
+	std::vector<const char*> m_cellVariableNames;
 
-	/** Total number of cells */
-	unsigned long m_totalCells;
+	/** Names of the vertex variables that should be written */
+	std::vector<const char*> m_vertexVariableNames;
 
-	/** Block buffer used to create equal sized blocks */
-	BlockBuffer m_blockBuffer;
+	/** Vertex filter (only used if vertex filter is enabled) */
+	internal::ParallelVertexFilter<T> m_vertexFilter;
 
-	/** Buffer required for blocking */
-	double *m_blocks;
-
-	/** Offsets in the XDMF file which describe the time dimension size */
-	size_t *m_timeDimPos;
+	/** The buffer filter for vertex data (only used if vertex filter is enabled) */
+	internal::BufferFilter<sizeof(T)> m_vertexDataFilter;
 
 	/** Only execute the flush on certain time steps */
 	unsigned int m_flushInterval;
 
 	/** Output step counter */
-	unsigned int m_timestep;
+	unsigned int m_timeStep;
+
+	/** The current mesh id */
+	unsigned int m_meshId;
+
+	/** The timestep counter of the current mesh */
+	unsigned int m_meshTimeStep;
+
+	bool m_useVertexFilter;
+
+	bool m_writePartitionInfo;
+
+	/** Total number of cells/vertices */
+	unsigned long m_totalSize[2];
 
 public:
 	/**
 	 * @param timestep Set this to > 0 to activate append mode
 	 */
-	XdmfWriter(int rank, const char* outputPrefix, const std::vector<const char*> &variableNames,
-			unsigned int timestep = 0)
-		: m_rank(rank), m_outputPrefix(outputPrefix),
-		  m_backend(topoTypeSize()),
-		  m_variableNames(variableNames),
-		  m_totalCells(0),
-		  m_blocks(0L), m_timeDimPos(0L), m_flushInterval(0), m_timestep(timestep)
+	XdmfWriter(BackendType backendType,
+			const char* outputPrefix,
+			unsigned int timeStep = 0)
+		: m_rank(0), m_outputPrefix(outputPrefix),
+		m_backend(backendType),
+		m_flushInterval(0),
+		m_timeStep(timeStep), m_meshId(0), m_meshTimeStep(0),
+		m_useVertexFilter(true), m_writePartitionInfo(true)
 	{
-#ifdef PARALLEL
-		m_comm = MPI_COMM_WORLD;
-#endif // PARALLEL
-
-		if (rank == 0) {
-			std::string xdmfName = std::string(outputPrefix) + ".xdmf";
-
-			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
-			m_xdmfFile.open(xdmfName.c_str());
-		}
+#ifdef USE_MPI
+		setComm(MPI_COMM_WORLD);
+#endif // USE_MPI
 	}
 
 	virtual ~XdmfWriter()
 	{
-		if (m_timeDimPos)
-			close();
+		close();
 	}
 
-#ifdef PARALLEL
+#ifdef USE_MPI
 	/**
 	 * Sets the communicator that should be used. Default is MPI_COMM_WORLD.
 	 */
 	void setComm(MPI_Comm comm)
 	{
 		m_comm = comm;
+		MPI_Comm_rank(comm, &m_rank);
+
+		m_backend.setComm(comm);
 	}
-#endif // PARALLEL
+#endif // USE_MPI
 
-	void init(unsigned int numCells, const unsigned int* cells, unsigned int numVertices, const double *vertices, bool useVertexFilter = true)
+	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames,
+			bool useVertexFilter = true, bool writePartitionInfo = true)
 	{
-		unsigned int offset = 0;
-#ifdef PARALLEL
-		// Apply vertex filter
-		ParallelVertexFilter filter(m_comm);
-		if (useVertexFilter) {
-			// Filter duplicate vertices
-			filter.filter(numVertices, vertices);
-			vertices = filter.localVertices();
-			numVertices = filter.numLocalVertices();
-		} else {
-			// No vertex filter -> just get the offset we should at
-			offset = numVertices;
-			MPI_Scan(MPI_IN_PLACE, &offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
-			offset -= numVertices;
-		}
-#endif // PARALLEL
+		m_cellVariableNames = cellVariableNames;
+		m_vertexVariableNames = vertexVariableNames;
 
-		// Add vertex offset to all cells and convert to unsigned long
-		unsigned long *h5Cells = new unsigned long[numCells * topoTypeSize()];
-#ifdef PARALLEL
-		if (useVertexFilter) {
-#ifdef _OPENMP
-			#pragma omp parallel for schedule(static)
-#endif
-			for (size_t i = 0; i < numCells*topoTypeSize(); i++)
-				h5Cells[i] = filter.globalIds()[cells[i]];
-		} else
-#endif // PARALLEL
-		{
-#ifdef _OPENMP
-			#pragma omp parallel for schedule(static)
-#endif
-			for (size_t i = 0; i < numCells*topoTypeSize(); i++)
-				h5Cells[i] = cells[i] + offset;
+		m_useVertexFilter = useVertexFilter;
+		m_writePartitionInfo = writePartitionInfo;
+
+		int nProcs = 1;
+#ifdef USE_MPI
+		MPI_Comm_size(m_comm, &nProcs);
+#endif // USE_MPI
+		if (nProcs == 1)
+			m_useVertexFilter = false;
+
+		// Create variable data for the backend
+		std::vector<backends::VariableData> cellVariableData;
+		cellVariableData.push_back(backends::VariableData("connect", backends::UNSIGNED_LONG, internal::Topology<Topo>::size(), false));
+		if (writePartitionInfo)
+			cellVariableData.push_back(backends::VariableData("partition", backends::INT, 1, false));
+		for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
+				it != cellVariableNames.end(); ++it) {
+			cellVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
 		}
 
-		// Initialize the XDMF file
-		unsigned long totalSize[2] = {numCells, numVertices};
-#ifdef PARALLEL
-		MPI_Allreduce(MPI_IN_PLACE, totalSize, 2, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
-#endif // PARALLEL
+		std::vector<backends::VariableData> vertexVariableData;
+		vertexVariableData.push_back(backends::VariableData("geometry", backends::FLOAT, 3, false));
+		for (std::vector<const char*>::const_iterator it = vertexVariableNames.begin();
+				it != vertexVariableNames.end(); ++it) {
+			vertexVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
+		}
 
+		// Open the backend
+		m_backend.open(m_outputPrefix, cellVariableData, vertexVariableData, m_timeStep == 0);
+
+		// Write the XML file
 		if (m_rank == 0) {
-			std::string backendPrefix(m_outputPrefix);
-			// Remove all directories from prefix
-			size_t pos = backendPrefix.find_last_of('/');
-			if (pos != std::string::npos)
-				backendPrefix = backendPrefix.substr(pos+1);
+			std::string xdmfName = m_outputPrefix + ".xdmf";
 
+			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
+			m_xdmfFile.open(xdmfName.c_str());
 
 			m_xdmfFile << "<?xml version=\"1.0\" ?>" << std::endl
 					<< "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>" << std::endl
 					<< "<Xdmf Version=\"2.0\">" << std::endl
-					<< " <Domain>" << std::endl;
-			m_xdmfFile << "  <Topology TopologyType=\"" << topoTypeName() << "\" NumberOfElements=\"" << totalSize[0] << "\">" << std::endl
-					// This should be UInt but for some reason this does not work with binary data
-					<< "   <DataItem NumberType=\"Int\" Precision=\"8\" Format=\""
-						<< backends::Backend::format() << "\" Dimensions=\""
-						<< totalSize[0] << " " << topoTypeSize() << "\">"
-					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "connect")
-					<< "</DataItem>" << std::endl
-					<< "  </Topology>" << std::endl;
-			m_xdmfFile << "  <Geometry name=\"geo\" GeometryType=\"XYZ\" NumberOfElements=\"" << totalSize[1] << "\">" << std::endl
-					<< "   <DataItem NumberType=\"Float\" Precision=\"8\" Format=\""
-						<< backends::Backend::format() << "\" Dimensions=\"" << totalSize[1] << " 3\">"
-					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "geometry")
-					<< "</DataItem>" << std::endl
-					<< "  </Geometry>" << std::endl;
+					<< " <Domain>" << std::endl
+					<< "  <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">" << std::endl;
 
-			m_xdmfFile << "  <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\""
-						<< backends::Backend::format() << "\" Dimensions=\"" << totalSize[0] << "\">"
-					<< backends::Backend::dataItemLocation(backendPrefix.c_str(), "partition")
-					<< "</DataItem>" << std::endl;
-
-			m_timeDimPos = new size_t[m_variableNames.size()];
-			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				m_xdmfFile << "  <DataItem NumberType=\"Float\" Precision=\"8\" Format=\""
-						<< backends::Backend::format() << "\" Dimensions=\"";
-				m_timeDimPos[i] = m_xdmfFile.tellp();
-				m_xdmfFile << std::setw(MAX_TIMESTEP_SPACE) << m_timestep << ' ' << totalSize[0] << "\">"
-						<< backends::Backend::dataItemLocation(backendPrefix.c_str(), m_variableNames[i])
-						<< "</DataItem>" << std::endl;
-			}
-
-			m_xdmfFile << "  <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">" << std::endl;
-
-			if (m_timestep == 0)
+			if (m_timeStep == 0)
 				closeXdmf();
 			else {
 				// Jump the correct position in the file
 				std::ostringstream tStartStream;
-				timeStepStartXdmf(m_timestep-1, tStartStream);
+				timeStepStartXdmf(m_timeStep-1, tStartStream);
 				std::string tStart = tStartStream.str();
 
 				// Find beginning of the (correct) time step
 				std::string line;
+				std::size_t pos;
 				while (getline(m_xdmfFile, line)) {
-					if (line.find(tStart) != std::string::npos)
+					pos = line.find(tStart);
+					if (pos != std::string::npos)
 						break;
 				}
 				if (!m_xdmfFile)
 					logError() << "Unable to find time step for appending";
+
+				// Extract mesh id and mesh step
+				std::istringstream ss(line.substr(pos + tStart.size()));
+				ss.seekg(13, std::iostream::cur); // Skip "<!-- mesh id: "
+				ss >> m_meshId;
+				ss.seekg(13, std::iostream::cur); // Skip ", mesh step: "
+				ss >> m_meshTimeStep;
+				logInfo() << "Found mesh" << m_meshId << "in step" << m_meshTimeStep;
+
+				m_meshId++;
+				m_meshTimeStep++;
 
 				// Find end of this time step
 				while (getline(m_xdmfFile, line)) {
@@ -269,122 +234,105 @@ public:
 			}
 		}
 
-		// Create partition information
-		unsigned int *partInfo = new unsigned int[numCells];
-#ifdef _OPENMP
-		#pragma omp parallel for schedule(static)
-#endif
-		for (unsigned int i = 0; i < numCells; i++)
-			partInfo[i] = m_rank;
-
-#ifdef PARALLEL
-		// Create block buffer
-		unsigned long blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
-		if (blockSize > 1) {
-			m_blockBuffer.init(m_comm, numCells, MPI_DOUBLE, blockSize);
-
-			MPI_Comm newComm;
-			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &newComm);
-			m_comm = newComm; // We no longer need MPI_COMM_WORLD
+#ifdef USE_MPI
+		if (m_timeStep != 0) {
+			// Broadcast the some information if we restart
+			unsigned int buf[2] = {m_meshId, m_meshTimeStep};
+			MPI_Bcast(buf, 2, MPI_UNSIGNED, 0, m_comm);
+			m_meshId = buf[0];
+			m_meshTimeStep = buf[1];
 		}
+#endif // USE_MPI
 
-		// Exchange cells and vertices
-		// Be careful with allocation/deallocation!!!
-		unsigned long *blockedCells = 0L;
-		double *blockedVertices = 0L;
-		unsigned int *blockedPartInfo = 0L;
-		if (m_blockBuffer.isInitialized()) {
-			numCells = m_blockBuffer.count();
-
-			if (m_timestep == 0) {
-				// Cells, vertices and partition info only needs to be exchanged
-				// when creating a new file
-				blockedCells = new unsigned long[numCells * topoTypeSize()];
-				m_blockBuffer.exchange(h5Cells, MPI_UNSIGNED_LONG, topoTypeSize(), blockedCells);
-
-
-				blockedVertices = m_blockBuffer.exchangeAny(vertices, MPI_DOUBLE, 3,
-						numVertices, numVertices);
-
-				if (numCells > 0)
-					blockedPartInfo = new unsigned int[numCells];
-				m_blockBuffer.exchange(partInfo, MPI_UNSIGNED, 1, blockedPartInfo);
-
-				// Overwrite pointers
-				delete [] h5Cells;
-				h5Cells = blockedCells;
-
-				vertices = blockedVertices;
-
-				delete [] partInfo;
-				partInfo = blockedPartInfo;
-			}
-
-			// Allocate memory for data exchange
-			if (numCells > 0)
-				m_blocks = new double[numCells];
-		}
-#endif // PARALLEL
-
-		// Create and initialize the HDF5 file
-		if (m_blockBuffer.count() > 0) {
-#ifdef PARALLEL
-			m_backend.setComm(m_comm);
-#endif // PARALLEL
-
-			// Compute the offsets where we should start in backend file
-			unsigned long offsets[2] = {numCells, numVertices};
-#ifdef PARALLEL
-			MPI_Scan(MPI_IN_PLACE, offsets, 2, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
-#endif // PARALLEL
-			offsets[0] -= numCells;
-			offsets[1] -= numVertices;
-
-			// Local size
-			unsigned int localSize[2] = {numCells, numVertices};
-
-			if (m_timestep == 0) {
-				m_backend.open(m_outputPrefix, m_variableNames,
-						totalSize, localSize, offsets,
-						h5Cells, vertices, partInfo);
-#ifdef PARALLEL
-				BlockBuffer::free(blockedVertices);
-#endif // PARALLEL
-				delete [] partInfo;
-			} else
-				m_backend.open(m_outputPrefix, m_variableNames,
-						totalSize, localSize, offsets,
-						h5Cells, vertices, partInfo, false);
-
-			// Save total number of cells (required to append a timestep)
-			m_totalCells = totalSize[0];
-
-			// Get flush interval
-			m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
-		}
-
-		delete [] h5Cells;
+		// Get flush interval
+		m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
 	}
 
 	/**
-	 * Closes the HDF5 file (should be done before MPI_Finalize is called)
+	 * @param restarting Set this to <code>true</code> if the codes restarts from a checkpoint
+	 *  and the XDMF writer should continue with the old mesh
 	 */
-	void close()
+	void setMesh(unsigned int numCells, const unsigned int* cells, unsigned int numVertices, const T *vertices, bool restarting = false)
 	{
-		if (m_blockBuffer.count() > 0) {
-			// Close backend
-			m_backend.close();
+#ifdef USE_MPI
+		// Apply vertex filter
+		internal::BufferFilter<3*sizeof(T)> vertexRemover;
+		if (m_useVertexFilter) {
+			// Filter duplicate vertices
+			m_vertexFilter.filter(numVertices, vertices);
 
-#ifdef PARALLEL
-			if (m_blockBuffer.isInitialized())
-				MPI_Comm_free(&m_comm);
-#endif // PARALLEL
+			if (!restarting) {
+				vertexRemover.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
+				vertices = static_cast<const T*>(vertexRemover.filter(vertices));
+			}
+
+			// Set the vertex data filter
+			if (m_backend.numVertexVars() > 0)
+				m_vertexDataFilter.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
+
+			numVertices = m_vertexFilter.numLocalVertices();
+		}
+#endif // USE_MPI
+
+		// Set the backend mesh
+		m_totalSize[0] = numCells;
+		m_totalSize[1] = numVertices;
+		unsigned long offset[2] = {numCells, numVertices};
+#ifdef USE_MPI
+		MPI_Allreduce(MPI_IN_PLACE, m_totalSize, 2, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
+		MPI_Scan(MPI_IN_PLACE, offset, 2, MPI_UNSIGNED_LONG, MPI_SUM, m_comm);
+#endif // USE_MPI
+		offset[0] -= numCells;
+		offset[1] -= numVertices;
+
+		// Add a new mesh to the backend
+		unsigned int localSize[2] = {numCells, numVertices};
+		m_backend.setMesh(m_meshId, m_totalSize, localSize, offset);
+
+		if (restarting)
+			// Can skip writing the mesh if we are restarting
+			return;
+
+		// Add vertex offset to all cells and convert to unsigned long
+		unsigned long *h5Cells = new unsigned long[numCells * internal::Topology<Topo>::size()];
+#ifdef USE_MPI
+		if (m_useVertexFilter) {
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif // _OPENMP
+			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++)
+				h5Cells[i] = m_vertexFilter.globalIds()[cells[i]];
+		} else
+#endif // USE_MPI
+		{
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif // _OPENMP
+			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++)
+				h5Cells[i] = cells[i] + offset[1];
 		}
 
-		delete [] m_timeDimPos;
-		m_timeDimPos = 0L; // Indicates closed file
+		m_backend.writeCellData(0, 0, h5Cells);
+		delete [] h5Cells;
 
-		delete [] m_blocks;
+		if (m_writePartitionInfo) {
+			// Create partition information
+			unsigned int *partInfo = new unsigned int[numCells];
+#ifdef _OPENMP
+			#pragma omp parallel for schedule(static)
+#endif // _OPENMP
+			for (unsigned int i = 0; i < numCells; i++)
+				partInfo[i] = m_rank;
+
+			m_backend.writeCellData(0, 1, partInfo);
+
+			delete [] partInfo;
+		}
+
+		m_backend.writeVertexData(0, 0, vertices);
+
+		m_meshId++;
+		m_meshTimeStep = 0;
 	}
 
 	/**
@@ -394,59 +342,95 @@ public:
 	{
 		if (m_rank == 0) {
 			m_xdmfFile << "   ";
-			timeStepStartXdmf(m_timestep, m_xdmfFile);
+			timeStepStartXdmf(m_timeStep, m_xdmfFile);
+			// Generate information for restarting (WARNING: if this line is modified the initialization has to be adapted)
+			m_xdmfFile << "<!-- mesh id: " << (m_meshId-1) << ", mesh step: " << m_meshTimeStep << " -->";
 			m_xdmfFile << std::endl;
-			m_xdmfFile << "    <Topology Reference=\"/Xdmf/Domain/Topology[1]\"/>" << std::endl
-					<< "    <Geometry Reference=\"/Xdmf/Domain/Geometry[1]\"/>" << std::endl
+			m_xdmfFile << "    <Topology TopologyType=\"" << internal::Topology<Topo>::name() << "\" NumberOfElements=\"" << m_totalSize[0] << "\">" << std::endl
+					// This should be UInt but for some reason this does not work with binary data
+					<< "     <DataItem NumberType=\"Int\" Precision=\"8\" Format=\""
+						<< m_backend.format() << "\" Dimensions=\"" << m_totalSize[0] << " " << internal::Topology<Topo>::size() << "\">"
+						<< m_backend.cellDataLocation(m_meshId-1, "connect")
+						<< "</DataItem>" << std::endl
+					<< "    </Topology>" << std::endl
+					<< "    <Geometry name=\"geo\" GeometryType=\"XYZ\" NumberOfElements=\"" << m_totalSize[1] << "\">" << std::endl
+					<< "     <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+						<< m_backend.format() << "\" Dimensions=\"" << m_totalSize[1] << " 3\">"
+						<< m_backend.vertexDataLocation(m_meshId-1, "geometry")
+						<< "</DataItem>" << std::endl
+					<< "    </Geometry>" << std::endl
 					<< "    <Time Value=\"" << time << "\"/>" << std::endl;
-			m_xdmfFile << "    <Attribute Name=\"partition\" Center=\"Cell\">" << std::endl
-					// Not sure why we need the total cells here but paraview complains otherwise
-					<< "     <DataItem Reference=\"/Xdmf/Domain/DataItem[1]\" Dimensions=\"" << m_totalCells << "\"/>" << std::endl
-					<< "    </Attribute>" << std::endl;
-			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				m_xdmfFile << "    <Attribute Name=\"" << m_variableNames[i] << "\" Center=\"Cell\">" << std::endl
-						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalCells << "\">" << std::endl
-						<< "      <DataItem NumberType=\"UInt\" Precision=\"8\" Format=\"XML\" Dimensions=\"3 2\">"
-						<< m_timestep << " 0 1 1 1 " << m_totalCells << "</DataItem>" << std::endl
-						<< "      <DataItem Reference=\"/Xdmf/Domain/DataItem[" << (i+2) << "]\"/>" << std::endl // PartInfo + 1 based index
+			if (m_writePartitionInfo) {
+				m_xdmfFile << "    <Attribute Name=\"partition\" Center=\"Cell\">" << std::endl
+						<< "     <DataItem  NumberType=\"Int\" Precision=\"4\" Format=\""
+							<< m_backend.format() << "\" Dimensions=\"" << m_totalSize[0] << "\">"
+							<< m_backend.cellDataLocation(m_meshId-1, "partition")
+							<< "</DataItem>" << std::endl
+						<< "    </Attribute>" << std::endl;
+			}
+			for (size_t i = 0; i < m_cellVariableNames.size(); i++) {
+				m_xdmfFile << "    <Attribute Name=\"" << m_cellVariableNames[i] << "\" Center=\"Cell\">" << std::endl
+						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[0] << "\">" << std::endl
+						<< "      <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"XML\" Dimensions=\"3 2\">"
+						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[0] << "</DataItem>" << std::endl
+						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+							<< m_backend.format() << "\" Dimensions=\""
+							<< m_meshTimeStep << ' ' << m_totalSize[0] << "\">"
+							<< m_backend.cellDataLocation(m_meshId-1, m_cellVariableNames[i])
+							<< "</DataItem>" << std::endl
 						<< "     </DataItem>" << std::endl
 						<< "    </Attribute>" << std::endl;
 			}
-			m_xdmfFile << "   </Grid>" << std::endl;
-
-			// Update total steps information
-			size_t pos = m_xdmfFile.tellp();
-			for (size_t i = 0; i < m_variableNames.size(); i++) {
-				m_xdmfFile.seekp(m_timeDimPos[i]);
-				m_xdmfFile << std::setw(MAX_TIMESTEP_SPACE) << (m_timestep+1);
+			for (size_t i = 0; i < m_vertexVariableNames.size(); i++) {
+				m_xdmfFile << "    <Attribute Name=\"" << m_vertexVariableNames[i] << "\" Center=\"Node\">" << std::endl
+						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[1] << "\">" << std::endl
+						<< "      <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"XML\" Dimensions=\"3 2\">"
+						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[1] << "</DataItem>" << std::endl
+						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+							<< m_backend.format() << "\" Dimensions=\""
+							<< m_meshTimeStep << ' ' << m_totalSize[1] << "\">"
+							<< m_backend.vertexDataLocation(m_meshId-1, m_vertexVariableNames[i])
+							<< "</DataItem>" << std::endl
+						<< "     </DataItem>" << std::endl
+						<< "    </Attribute>" << std::endl;
 			}
-			m_xdmfFile.seekp(pos);
+
+			m_xdmfFile << "   </Grid>" << std::endl;
 
 			closeXdmf();
 		}
 
-		m_timestep++;
+		m_timeStep++;
+		m_meshTimeStep++;
 	}
 
 	/**
-	 * Write data for one variable at the current time step
+	 * Write cell data for one variable at the current time step
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-	void writeData(unsigned int id, const double *data)
+	void writeCellData(unsigned int id, const T *data)
 	{
-		SCOREP_USER_REGION("XDMFWriter_writeData", SCOREP_USER_REGION_TYPE_FUNCTION);
+		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
 
-#ifdef PARALLEL
-		if (m_blockBuffer.isInitialized()) {
-			m_blockBuffer.exchange(data, m_blocks);
-			data = m_blocks;
-		}
-#endif // PARALLEL
+		m_backend.writeCellData(m_meshTimeStep-1, id + (m_writePartitionInfo ? 2 : 1), data);
+	}
 
-		if (m_blockBuffer.count() > 0) {
-			m_backend.writeData(m_timestep-1, id, data); // We already incremented m_timestep
-		}
+	/**
+	 * Write vertex data for one variable at the current time step
+	 *
+	 * @param id The number of the variable that should be written
+	 */
+	void writeVertexData(unsigned int id, const T *data)
+	{
+		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+
+		// Filter duplicates if the vertex filter is enabled
+		const void* tmp = data;
+		if (m_useVertexFilter)
+			tmp = m_vertexDataFilter.filter(data);
+
+		m_backend.writeVertexData(m_meshTimeStep-1, id + 1, tmp);
 	}
 
 	/**
@@ -456,10 +440,17 @@ public:
 	{
 		SCOREP_USER_REGION("XDMFWriter_flush", SCOREP_USER_REGION_TYPE_FUNCTION);
 
-		if (m_blockBuffer.count() > 0) {
-			if (m_timestep % m_flushInterval == 0)
-				m_backend.flush();
-		}
+		if (m_timeStep % m_flushInterval == 0)
+			m_backend.flush();
+	}
+
+	/**
+	 * Closes the HDF5 file (should be done before MPI_Finalize is called)
+	 */
+	void close()
+	{
+		// Close backend
+		m_backend.close();
 	}
 
 	/**
@@ -467,7 +458,7 @@ public:
 	 */
 	unsigned int timestep() const
 	{
-		return m_timestep;
+		return m_timeStep;
 	}
 
 private:
@@ -479,16 +470,6 @@ private:
 				<< "</Xdmf>" << std::endl;
 		m_xdmfFile.seekp(contPos);
 	}
-
-	/**
-	 * @return Name of the topology type in the XDMF file
-	 */
-	const char* topoTypeName() const;
-
-	/**
-	 * @return Number of vertices of the topology type
-	 */
-	unsigned int topoTypeSize() const;
 
 private:
 	/**
@@ -504,30 +485,6 @@ private:
 	static const unsigned int MAX_TIMESTEP_SPACE = 12;
 };
 
-template<> inline
-const char* XdmfWriter<TRIANGLE>::topoTypeName() const
-{
-	return "Triangle";
 }
 
-template<> inline
-const char* XdmfWriter<TETRAHEDRON>::topoTypeName() const
-{
-	return "Tetrahedron";
-}
-
-template<> inline
-unsigned int XdmfWriter<TRIANGLE>::topoTypeSize() const
-{
-	return 3;
-}
-
-template<> inline
-unsigned int XdmfWriter<TETRAHEDRON>::topoTypeSize() const
-{
-	return 4;
-}
-
-}
-
-#endif // XDMF_WRITER_H
+#endif // XDMFWRITER_XDMFWRITER_H

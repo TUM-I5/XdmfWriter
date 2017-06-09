@@ -8,11 +8,11 @@
 #
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
-# 
+#
 # 2. Redistributions in binary form must reproduce the above copyright notice
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-# 
+#
 # 3. Neither the name of the copyright holder nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
@@ -44,11 +44,11 @@ vars.AddVariables(
 env = Environment(variables=vars)
 if 'buildVariablesFile' in env:
   vars = Variables(env['buildVariablesFile'])
-  
+
 # PUML specific variables
 vars.AddVariables(
   PathVariable( 'buildDir', 'where to build the code', 'build', PathVariable.PathIsDirCreate ),
-  
+
   EnumVariable( 'compileMode', 'mode of the compilation', 'release',
                 allowed_values=('debug', 'release')
               ),
@@ -56,11 +56,11 @@ vars.AddVariables(
   EnumVariable( 'parallelization', 'level of parallelization', 'none',
                 allowed_values=('none', 'mpi')
               ),
-                  
+
   BoolVariable( 'hdf5', 'use HDF5',
                 True
                ),
-                  
+
   BoolVariable( 'unitTests', 'builds additional unit tests',
                 False
               ),
@@ -83,17 +83,17 @@ env.Tool('PrefixPathTool')
 # external variables
 vars.AddVariables(
   env['PREFIX_PATH_VARIABLE'],
-                  
+
   PathVariable( 'cc',
                 'C compiler (default: gcc (serial), mpicc (parallel))',
                 None,
                 PathVariable.PathAccept ),
-                  
+
   PathVariable( 'cxx',
                 'C++ compiler (default: g++ (serial), mpicxx (parallel))',
                 None,
                 PathVariable.PathAccept ),
-                
+
   BoolVariable( 'useEnv',
                 'set variables set in the execution environment',
                 True )
@@ -105,19 +105,19 @@ if '-h' in sys.argv or '--help' in sys.argv:
   import SCons
   print SCons.Script.help_text
   env.Exit()
-  
+
 # handle unknown, maybe misspelled variables
 unknownVariables = vars.UnknownVariables()
 
 # remove the buildVariablesFile from the list of unknown variables (used before)
 if 'buildVariablesFile' in unknownVariables:
   unknownVariables.pop('buildVariablesFile')
-  
+
 # exit in the case of unknown variables
 if unknownVariables:
   print "*** The following build variables are unknown: " + str(unknownVariables.keys())
   env.Exit(1)
-  
+
 # set environment
 env = Environment(variables=vars)
 
@@ -156,7 +156,7 @@ elif env['scalasca'] == '2':
 
 # add parallel flag for mpi
 if env['parallelization'] in ['mpi']:
-  env.Append(CPPDEFINES=['PARALLEL'])
+  env.Append(CPPDEFINES=['USE_MPI'])
 
 # set level of logger
 if env['logLevel'] == 'debug':
@@ -222,21 +222,21 @@ if env['unitTests']:
 
     # define location of cxxtest
     env['CXXTEST'] = '#/../submodules/cxxtest'
-  
+
     # Parallel tests?
     if env['parallelization'] in ['mpi']:
         env['CXXTEST_COMMAND'] = 'mpiexec -np 3 %t'
         env['CXXTEST_OPTS'] = ['--main=cxxtest_main']
-  
+
     # add cxxtest-tool
     env.Tool('cxxtest', toolpath=[env['CXXTEST']+'/build_tools/SCons'])
-    
+
     # Append CxxTest to CPPPATH (since we have some normal .cpp files included)
     env.Append(CPPPATH=env['CXXTEST_CPPPATH'])
-    
+
     # Get test source files
     env.testSourceFiles = []
-  
+
     Export('env')
     SConscript('unittests/SConscript', variant_dir='#/'+env['buildDir']+'/unittests')
     Import('env')

@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@ public:
 		for (unsigned int i = 0; i < 6*3; i++)
 			vertices[i] = RANDOM_VALUES[i+6*3*rank];
 
-		ParallelVertexFilter filter;
+		xdmfwriter::internal::ParallelVertexFilter<double> filter;
 		filter.filter(6, vertices);
 
 		// Get the global ids
@@ -66,23 +66,13 @@ public:
 		// with MPI_Bcast
 		MPI_Bcast(globalIds, 6*3, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
 
-		if (rank == 0) {
-			// Sort the vertices according to the global id array
-			double sortedVertices[6*3*3];
-			memset(sortedVertices, 0, sizeof(double)*6*3*3);
-			for (unsigned int i = 0; i < 6*3; i++) {
-				memcpy(&sortedVertices[globalIds[i]*3], &RANDOM_VALUES[i*3], sizeof(double)*3);
-			}
-
-			for (unsigned int i = 1; i < 6*3; i++) {
-				//logInfo() << rank << sortedVertices[(i-1)*3] << sortedVertices[i*3];
-				TS_ASSERT(lessEqual(&sortedVertices[(i-1)*3], &sortedVertices[i*3]));
-			}
-		}
-
 		unsigned int sumVertices = filter.numLocalVertices();
 		MPI_Allreduce(MPI_IN_PLACE, &sumVertices, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
 		TS_ASSERT_EQUALS(sumVertices, 6*3);
+
+		for (unsigned int i = 0; i < 6*3; i++) {
+			TS_ASSERT_EQUALS(globalIds[i], i);
+		}
 	}
 
 	/**
@@ -107,7 +97,7 @@ public:
 		for (unsigned int i = 0; i < 6*3; i++)
 			vertices[i] = random_vertices[i+6*3*rank];
 
-		ParallelVertexFilter filter;
+		xdmfwriter::internal::ParallelVertexFilter<double> filter;
 		filter.filter(6, vertices);
 
 		// Get the global ids
@@ -117,21 +107,14 @@ public:
 		// See testFilterUnique why we are not using MPI_Allgather here
 		MPI_Bcast(globalIds, 6*3, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
 
-		// Sort the vertices according to the global id array
-		double sortedVertices[6*3*3];
-		memset(sortedVertices, 0, sizeof(double)*6*3*3);
-		for (unsigned int i = 0; i < 6*3; i++) {
-			memcpy(&sortedVertices[globalIds[i]*3], &random_vertices[i*3], sizeof(double)*3);
-		}
-
-		for (unsigned int i = 1; i < totalVertices; i++) {
-			//logInfo() << rank << sortedVertices[(i-1)*3] << sortedVertices[i*3];
-			TS_ASSERT(lessEqual(&sortedVertices[(i-1)*3], &sortedVertices[i*3]));
-		}
-
 		unsigned int sumVertices = filter.numLocalVertices();
 		MPI_Allreduce(MPI_IN_PLACE, &sumVertices, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
 		TS_ASSERT_EQUALS(sumVertices, totalVertices);
+
+		TS_ASSERT_EQUALS(globalIds[4], globalIds[8]);
+		TS_ASSERT_EQUALS(globalIds[10], globalIds[8]);
+		TS_ASSERT_EQUALS(globalIds[1], globalIds[14]);
+		TS_ASSERT_EQUALS(globalIds[6], globalIds[15]);
 	}
 
 	/**
@@ -147,10 +130,10 @@ public:
 
 		memcpy(&random_vertices[4*3], &random_vertices[8*3], sizeof(double)*3);
 		reinterpret_cast<uint64_t*>(random_vertices)[4*3] &= ~0xF;
-		memcpy(&random_vertices[10*3], &random_vertices[8*3], sizeof(double)*3);
-		reinterpret_cast<uint64_t*>(random_vertices)[10*3] |= 0xF;
-		memcpy(&random_vertices[1*3], &random_vertices[14*3], sizeof(double)*3);
-		reinterpret_cast<uint64_t*>(random_vertices)[14*3+1] |= 0xF;
+		memcpy(&random_vertices[14*3], &random_vertices[8*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[14*3] |= 0xF;
+		memcpy(&random_vertices[1*3], &random_vertices[9*3], sizeof(double)*3);
+		reinterpret_cast<uint64_t*>(random_vertices)[9*3+1] |= 0xF;
 		memcpy(&random_vertices[6*3], &random_vertices[15*3], sizeof(double)*3);
 		reinterpret_cast<uint64_t*>(random_vertices)[15*3+2] |= 0xF;
 
@@ -160,7 +143,7 @@ public:
 		for (unsigned int i = 0; i < 6*3; i++)
 			vertices[i] = random_vertices[i+6*3*rank];
 
-		ParallelVertexFilter filter;
+		xdmfwriter::internal::ParallelVertexFilter<double> filter;
 		filter.filter(6, vertices);
 
 		// Get the global ids
@@ -170,30 +153,14 @@ public:
 		// See testFilterUnique why we are not using MPI_Allgather here
 		MPI_Bcast(globalIds, 6*3, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
 
-		// Sort the vertices according to the global id array
-		double sortedVertices[6*3*3];
-		memset(sortedVertices, 0, sizeof(double)*6*3*3);
-		for (unsigned int i = 0; i < 6*3; i++) {
-			memcpy(&sortedVertices[globalIds[i]*3], &random_vertices[i*3], sizeof(double)*3);
-		}
-
-		for (unsigned int i = 1; i < totalVertices; i++) {
-			//logInfo() << rank << sortedVertices[(i-1)*3] << sortedVertices[i*3];
-			TS_ASSERT(lessEqual(&sortedVertices[(i-1)*3], &sortedVertices[i*3]));
-		}
-
 		unsigned int sumVertices = filter.numLocalVertices();
 		MPI_Allreduce(MPI_IN_PLACE, &sumVertices, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
 		TS_ASSERT_EQUALS(sumVertices, totalVertices);
-	}
 
-private:
-	static bool lessEqual(const double* vertexA, const double* vertexB)
-	{
-		return (vertexA[0] < vertexB[0])
-				|| (vertexA[0] == vertexB[0] && vertexA[1] < vertexB[1])
-				|| (vertexA[0] == vertexB[0] && vertexA[1] == vertexB[1]
-					&& vertexA[2] < vertexB[2]);
+		TS_ASSERT_EQUALS(globalIds[4], globalIds[8]);
+		TS_ASSERT_EQUALS(globalIds[14], globalIds[8]);
+		TS_ASSERT_EQUALS(globalIds[1], globalIds[9]);
+		TS_ASSERT_EQUALS(globalIds[6], globalIds[15]);
 	}
 
 	const static double RANDOM_VALUES[6*3*3];

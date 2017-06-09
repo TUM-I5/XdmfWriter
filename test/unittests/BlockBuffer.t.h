@@ -53,9 +53,9 @@ public:
 	{
 		MPI_Comm_rank(MPI_COMM_WORLD, &m_rank);
 
-		m_blockBuffer0.init(MPI_COMM_WORLD, (m_rank+1)*10, MPI_DOUBLE, sizeof(double)*8);
+		m_blockBuffer0.init(MPI_COMM_WORLD, (m_rank+1)*10, sizeof(double), sizeof(double)*8);
 
-		m_blockBuffer1.init(MPI_COMM_WORLD, 5, MPI_DOUBLE, sizeof(double)*20);
+		m_blockBuffer1.init(MPI_COMM_WORLD, 5, sizeof(double), sizeof(double)*20);
 	}
 
 	void testIsInitialized()
@@ -84,7 +84,7 @@ public:
 			data[i] = i + offset[m_rank];
 
 		double out[28];
-		m_blockBuffer0.exchange(data, out);
+		m_blockBuffer0.exchange(data, MPI_DOUBLE, 1, out);
 		offset[1] = 16; offset[2] = 32;
 		for (unsigned int i = 0; i < m_blockBuffer0.count(); i++)
 			TS_ASSERT_EQUALS(out[i], offset[m_rank]+i);
@@ -93,7 +93,7 @@ public:
 		for (int i = 0; i < 5; i++)
 			data[i] = i + (m_rank*5);
 
-		m_blockBuffer1.exchange(data, out);
+		m_blockBuffer1.exchange(data, MPI_DOUBLE, 1, out);
 		for (unsigned int i = 0; i < m_blockBuffer1.count(); i++)
 			TS_ASSERT_EQUALS(out[i], i);
 

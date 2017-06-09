@@ -59,7 +59,7 @@ private:
 	int m_rank;
 
 	unsigned int m_cells[4*4];
-	double m_vertices[5*3];
+	float m_vertices[5*3];
 
 	std::vector<const char*> m_varNames;
 
@@ -81,11 +81,11 @@ public:
 
 	void testTriangle()
 	{
-		double data[5][4];
+		float data[5][4];
 
 		m_varNames.push_back("b");
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE> writer0(m_rank, "test", m_varNames);
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(m_rank, "test", m_varNames);
 		writer0.init(4, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
@@ -100,10 +100,10 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		double dataFile[5][3*4];
+		float dataFile[5][3*4];
 		load("test", dataFile[0], sizeof(dataFile));
 		for (int i = 0; i < 5; i++) {
-			TS_ASSERT_EQUALS(memcmp(data[i], &dataFile[i][4*m_rank], 4*sizeof(double)), 0);
+			TS_ASSERT_EQUALS(memcmp(data[i], &dataFile[i][4*m_rank], 4*sizeof(float)), 0);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -117,10 +117,10 @@ public:
 	// Test append mode
 	void testAppend()
 	{
-		double data[4];
+		float data[4];
 
 		// TODO this currently tests failures only
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE> writer0(m_rank, "test", m_varNames);
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(m_rank, "test", m_varNames);
 		writer0.init(4, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
@@ -139,7 +139,7 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer1(m_rank, "test", m_varNames);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(m_rank, "test", m_varNames);
 		writer1.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
@@ -163,7 +163,7 @@ public:
 			TS_ASSERT_EQUALS(rename("test.xdmf", "test1.xdmf"), 0);
 		}
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer2a(m_rank, "test", m_varNames);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(m_rank, "test", m_varNames);
 		writer2a.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 3; i++) {
@@ -176,7 +176,7 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON> writer2b(m_rank, "test", m_varNames, 3);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(m_rank, "test", m_varNames, 3);
 		writer2b.init(3, m_cells, 5, m_vertices);
 
 		for (int i = 3; i < 5; i++) {

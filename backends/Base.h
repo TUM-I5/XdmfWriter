@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2016, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2016-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -37,13 +37,22 @@
 #ifndef XDMF_WRITER_BACKENDS_BASE_H
 #define XDMF_WRITER_BACKENDS_BASE_H
 
-#ifdef PARALLEL
+#ifdef USE_MPI
 #include <mpi.h>
-#endif // PARALLEL
+#endif // USE_MPI
 
 #include <string>
+#include <vector>
 
+#include "utils/env.h"
 #include "utils/logger.h"
+#include "utils/timeutils.h"
+
+#ifdef USE_MPI
+#include "BlockBuffer.h"
+#else // USE_MPI
+#include "BlockBufferSerial.h"
+#endif // USE_MPI
 
 namespace xdmfwriter
 {
@@ -51,45 +60,91 @@ namespace xdmfwriter
 namespace backends
 {
 
+enum VariableType
+{
+	FLOAT, // float or double
+	INT,
+	UNSIGNED_LONG
+};
+
+struct VariableData
+{
+	VariableData(const char* name, VariableType type, unsigned int count, bool hasTime)
+		: name(name), type(type), count(count), hasTime(hasTime)
+	{ }
+
+	const char* name;
+
+	VariableType type;
+
+	/** The number of values in the variable */
+	unsigned int count;
+
+	bool hasTime;
+};
+
+template<typename T>
 class Base
 {
-protected:
-	const unsigned int m_topoTypeSize;
-
 private:
-#ifdef PARALLEL
+	const std::string m_format;
+
+#ifdef USE_MPI
 	MPI_Comm m_comm;
-#endif // PARALLEL
+
+	/** Communicator containing only I/O processes */
+	MPI_Comm m_ioComm;
+#endif // USE_MPI
 
 	/** Rank of this process */
 	int m_rank;
 
-	/** The number of variables */
-	unsigned int m_numVars;
+	std::string m_filePrefix;
+
+	/** The file name prefix but without directories (required for the XML file) */
+	std::string m_backendPrefix;
+
+	std::vector<VariableData> m_variableData;
+
+	/** The file system block size */
+	unsigned long m_blockSize;
 
 	/** Total number of cells */
-	unsigned long m_totalCells;
+	unsigned long m_totalElems;
 	/** Local number of cells */
-	unsigned int m_localCells;
+	unsigned int m_localElems;
 	/** Offset where we start writing our part */
-	unsigned long m_offsetCells;
+	unsigned long m_offset;
+
+	/** Block buffer used to create equal sized blocks */
+	BlockBuffer m_blockBuffer;
+
+	/** The buffer size required for the block buffer */
+	unsigned long m_bufferSize;
 
 protected:
-	Base(unsigned int topoTypeSize)
-		: m_topoTypeSize(topoTypeSize),
-#ifdef PARALLEL
+	Base(const char* format)
+		: m_format(format),
+#ifdef USE_MPI
 		  m_comm(MPI_COMM_WORLD),
-#endif // PARALLEL
+		  m_ioComm(MPI_COMM_NULL),
+#endif // USE_MPI
 		  m_rank(0),
-		  m_numVars(0),
-		  m_totalCells(0),
-		  m_localCells(0),
-		  m_offsetCells(0)
+		  m_blockSize(1),
+		  m_totalElems(0),
+		  m_localElems(0),
+		  m_offset(0),
+		  m_bufferSize(0)
 	{
 	}
 
 public:
-#ifdef PARALLEL
+	virtual ~Base()
+	{
+		close();
+	}
+
+#ifdef USE_MPI
 	/**
 	 * Sets the communicator that should be used. Default is MPI_COMM_WORLD.
 	 */
@@ -98,18 +153,115 @@ public:
 		m_comm = comm;
 		MPI_Comm_rank(comm, &m_rank);
 	}
-#endif // PARALLEL
+#endif // USE_MPI
 
-protected:
-	void open(unsigned int numVars, unsigned long totalCells,
-			unsigned int localCells, unsigned long offsetCells)
+	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
-		m_numVars = numVars;
-		m_totalCells = totalCells;
-		m_localCells = localCells;
-		m_offsetCells = offsetCells;
+		// Store file and backend prefix
+		m_filePrefix = outputPrefix;
+		m_backendPrefix = outputPrefix;
+		// Remove all directories from prefix
+		size_t pos = m_backendPrefix.find_last_of('/');
+		if (pos != std::string::npos)
+			m_backendPrefix = m_backendPrefix.substr(pos+1);
+
+		m_variableData = variableData;
+
+		m_blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
 	}
 
+	virtual void setMesh(unsigned int meshId,
+			unsigned long totalElements, unsigned int localElements, unsigned long offset)
+	{
+		m_totalElems = totalElements;
+		m_localElems = localElements;
+		m_offset = offset;
+
+		m_bufferSize = 0;
+#ifdef USE_MPI
+		// Create block buffer
+		if (m_blockSize > 1) {
+			m_blockBuffer.init(m_comm, localElements, sizeof(T), m_blockSize);
+
+			if (m_ioComm != MPI_COMM_NULL)
+				MPI_Comm_free(&m_ioComm);
+
+			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &m_ioComm);
+			m_localElems = m_blockBuffer.count();
+
+			m_offset = m_localElems;
+			if (m_offset > 0) {
+				MPI_Scan(MPI_IN_PLACE, &m_offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, m_ioComm);
+				m_offset -= m_localElems;
+			}
+
+			// Compute the max buffer space we need
+			for (std::vector<VariableData>::const_iterator it = m_variableData.begin();
+					it != m_variableData.end(); ++it) {
+				m_bufferSize = std::max(m_bufferSize,
+					static_cast<unsigned long>(it->count * variableSize(it->type)));
+			}
+			m_bufferSize *= m_localElems;
+		}
+#endif // USE_MPI
+	}
+
+	/**
+	 * @param buffer A buffer that is large if enough and can be used for temporary storage
+	 */
+	void writeData(unsigned int timestep, unsigned int id, const void* data, void* buffer)
+	{
+#ifdef USE_MPI
+		if (m_blockBuffer.isInitialized()) {
+			m_blockBuffer.exchange(data, variableMPIType(m_variableData[id].type),
+				m_variableData[id].count, buffer);
+			write(timestep, id, buffer);
+		} else {
+#endif // USE_MPI
+			write(timestep, id, data);
+#ifdef USE_MPI
+		}
+#endif // USE_MPI
+	}
+
+	virtual void flush() = 0;
+
+	virtual void close()
+	{
+#ifdef USE_MPI
+		if (m_ioComm != MPI_COMM_NULL) {
+			MPI_Comm_free(&m_ioComm);
+			m_ioComm = MPI_COMM_NULL;
+		}
+#endif // USE_MPI
+	}
+
+	unsigned long bufferSize() const
+	{
+		return m_bufferSize;
+	}
+
+	const char* format() const
+	{
+		return m_format.c_str();
+	}
+
+	unsigned int numVariables() const
+	{
+		return m_variableData.size();
+	}
+
+	/**
+	 * @return The relative (to the XDMF file) data location in XMDF format
+	 *
+	 * @warning Subclasses have to override this function to return the complete location
+	 */
+	virtual std::string dataLocation(unsigned int meshId, const char* variable) const
+	{
+		return m_backendPrefix;
+	}
+
+protected:
 	/**
 	 * Backup an existing backend file
 	 */
@@ -118,37 +270,82 @@ protected:
 		// Backup any existing file
 		struct stat statBuffer;
 		if (m_rank == 0 && stat(file.c_str(), &statBuffer) == 0) {
-			logWarning() << "File" << file << "already exists. Creating backup.";
-			rename(file.c_str(), (file + ".bak").c_str());
+			logWarning() << file << "already exists. Creating backup.";
+			rename(file.c_str(), (file + ".bak_" + utils::TimeUtils::timeAsString("%F_%T", time(0L))).c_str());
 		}
 	}
 
-#ifdef PARALLEL
+#ifdef USE_MPI
 	MPI_Comm comm() const
 	{
 		return m_comm;
 	}
-#endif // PARALLEL
+#endif // USE_MPI
 
-	unsigned int numVars() const
+	int rank() const
 	{
-		return m_numVars;
+		return m_rank;
 	}
 
-	unsigned long totalCells() const
+	const std::string& filePrefix() const
 	{
-		return m_totalCells;
+		return m_filePrefix;
 	}
 
-	unsigned int localCells() const
+	unsigned long totalElements() const
 	{
-		return m_localCells;
+		return m_totalElems;
 	}
 
-	unsigned long offsetCells() const
+	unsigned int localElements() const
 	{
-		return m_offsetCells;
+		return m_localElems;
 	}
+
+	unsigned long offset() const
+	{
+		return m_offset;
+	}
+
+	const std::vector<VariableData>& variables() const
+	{
+		return m_variableData;
+	}
+
+	virtual void write(unsigned int timestep, unsigned int id, const void* data) = 0;
+
+protected:
+	static unsigned int variableSize(VariableType type)
+	{
+		switch (type) {
+		case FLOAT:
+			return sizeof(T);
+		case INT:
+			return sizeof(int);
+		case UNSIGNED_LONG:
+			return sizeof(unsigned long);
+		}
+
+		return 0;
+	}
+
+#ifdef USE_MPI
+	static MPI_Datatype variableMPIType(VariableType type)
+	{
+		switch (type) {
+		case FLOAT:
+			if (sizeof(T) == sizeof(float))
+				return MPI_FLOAT;
+			return MPI_DOUBLE;
+		case INT:
+			return MPI_INT;
+		case UNSIGNED_LONG:
+			return MPI_UNSIGNED_LONG;
+		}
+
+		return MPI_DATATYPE_NULL;
+	}
+#endif // USE_MPI
 };
 
 }

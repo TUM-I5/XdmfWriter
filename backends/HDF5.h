@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2016, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2016-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,8 @@ namespace xdmfwriter
 namespace backends
 {
 
-class HDF5 : public Base
+template<typename T>
+class HDF5 : public Base<T>
 {
 private:
 	hid_t m_hdfFile;
@@ -69,7 +70,7 @@ private:
 
 public:
 	HDF5(unsigned int topoTypeSize)
-		: Base(topoTypeSize),
+		: Base(topoTypeSize, "HDF"),
 		  m_hdfFile(0),
 		  m_hdfAccessList(H5P_DEFAULT),
 		  m_hdfVars(0L),
@@ -298,11 +299,6 @@ public:
 	}
 
 public:
-	static const char* format()
-	{
-		return "HDF";
-	}
-
 	/**
 	 * @param prefix
 	 * @param var

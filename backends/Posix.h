@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2016, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2016-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "utils/stringutils.h"
+
 #include "Base.h"
 
 namespace xdmfwriter
@@ -50,132 +52,134 @@ namespace xdmfwriter
 namespace backends
 {
 
-class Posix : public Base
+#define checkErr(...) _checkErr(__VA_ARGS__, __FILE__, __LINE__)
+
+template<typename T>
+class Posix : public Base<T>
 {
 private:
 	/** File handles */
 	int* m_fh;
 
 public:
-	Posix(unsigned int topoTypeSize)
-		: Base(topoTypeSize),
-		  m_fh(0L)
+	Posix() : Base<T>("Binary"),
+		m_fh(0L)
 	{
 	}
 
-	virtual ~Posix()
+	void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
-		close();
-	}
-
-	/**
-	 *
-	 * @param prefix
-	 * @param variables List of variables which are written
-	 * @param totalSize The total number of cells and vertices
-	 * @param localSize The local number of cells and vertices
-	 * @param offset The offset of the local process for cells and vertices
-	 * @param cells Cell data (only required for <code>create == true</code>)
-	 * @param vertices Vertex data (only required for <code>create == true</code>)
-	 * @param partition Partition data (only required for <code>create == true</code>)
-	 * @param create
-	 */
-	void open(const std::string &prefix, const std::vector<const char*> &variables,
-			const unsigned long totalSize[2], const unsigned int localSize[2],
-			const unsigned long offset[2],
-			const unsigned long* cells, const double* vertices,
-			const unsigned int* partition, bool create = true)
-	{
-		Base::open(variables.size(), totalSize[0], localSize[0], offset[0]);
+		Base<T>::open(outputPrefix, variableData, create);
 
 		if (create) {
-			// Create backups
-			backup(filename(prefix, "connect"));
-			backup(filename(prefix, "geometry"));
-			backup(filename(prefix, "partition"));
-			for (std::vector<const char*>::const_iterator i = variables.begin();
-					i != variables.end(); i++)
-				backup(filename(prefix, *i));
+			if (Base<T>::rank() == 0) {
+				Base<T>::backup(outputPrefix);
+				checkErr(mkdir(outputPrefix.c_str(), 0755));
+			}
 
-#ifdef PARALLEL
-			// Make sure the file is moved before continuing
-			MPI_Barrier(comm());
-#endif // PARALLEL
-
-			// Create connect file
-			int fh = open(filename(prefix, "connect").c_str());
-			write(fh, cells, offset[0]*m_topoTypeSize*sizeof(unsigned long),
-					localSize[0]*m_topoTypeSize*sizeof(unsigned long));
-			checkErr(::close(fh));
-
-			// Create geometry file
-			fh = open(filename(prefix, "geometry").c_str());
-			write(fh, vertices, offset[1]*3*sizeof(double),
-					localSize[1]*3*sizeof(double));
-			checkErr(::close(fh));
-
-			// Create partition file
-			fh = open(filename(prefix, "partition").c_str());
-			write(fh, partition, offset[0]*sizeof(unsigned int),
-					localSize[0]*sizeof(unsigned int));
-			checkErr(::close(fh));
+#ifdef USE_MPI
+			// Ensure that everybody sees the new directory
+			MPI_Barrier(Base<T>::comm());
+#endif // USE_MPI
 		}
-
-		// Create/open variable files
-		m_fh = new int[variables.size()];
-		for (unsigned int i = 0; i < numVars(); i++)
-			m_fh[i] = open(filename(prefix, variables[i]).c_str());
 	}
 
-	void writeData(unsigned int timestep, unsigned int id, const double* data)
+	void setMesh(unsigned int meshId,
+		unsigned long totalElements, unsigned int localElements, unsigned long offset)
 	{
-		size_t offset = (totalCells() * timestep + offsetCells()) * sizeof(double);
-		write(m_fh[id], data, offset, localCells() * sizeof(double));
+		Base<T>::setMesh(meshId, totalElements, localElements, offset);
+
+		// Backup the old folder an create a new one
+		std::string folder = Base<T>::filePrefix() + "/mesh" + utils::StringUtils::toString(meshId);
+
+		if (Base<T>::rank() == 0) {
+			// Check if the folder still exists (if we run from a checkpoint)
+			struct stat statBuffer;
+			if (stat(folder.c_str(), &statBuffer) != 0)
+				checkErr(mkdir(folder.c_str(), 0755));
+		}
+
+#ifdef USE_MPI
+		// Ensure that everybody sees the change
+		MPI_Barrier(Base<T>::comm());
+#endif // USE_MPI
+
+		if (m_fh)
+			closeFiles();
+		else
+			m_fh = new int[Base<T>::variables().size()];
+
+		if (Base<T>::localElements() > 0) {
+			for (unsigned int i = 0; i < Base<T>::variables().size(); i++) {
+				m_fh[i] = open(filename(Base<T>::filePrefix(), meshId, Base<T>::variables()[i].name).c_str());
+			}
+		} else {
+			delete [] m_fh;
+			m_fh = 0L;
+		}
 	}
 
 	void flush()
 	{
-		for (unsigned int i = 0; i < numVars(); i++)
-			checkErr(fsync(m_fh[i]));
-	}
-
-	/**
-	 * Closes the HDF5 file (should be done before MPI_Finalize is called)
-	 */
-	void close()
-	{
 		if (m_fh) {
-			for (unsigned int i = 0; i < numVars(); i++)
-				checkErr(::close(m_fh[i]));
-
-			delete [] m_fh;
-			m_fh = 0L; // Indicates closed files
+			for (unsigned int i = 0; i < Base<T>::variables().size(); i++)
+				checkErr(fsync(m_fh[i]));
 		}
 	}
 
-public:
-	static const char* format()
+	/**
+	 * Closes the POSIX files
+	 */
+	void close()
 	{
-		return "Binary";
+		Base<T>::close();
+
+		closeFiles();
+		delete [] m_fh;
+		m_fh = 0L;
 	}
 
 	/**
-	 * @param prefix
 	 * @param var
 	 * @return The location name in the XDMF file for a data item
 	 */
-	static std::string dataItemLocation(const char* prefix, const char* var)
+	std::string dataLocation(unsigned int meshId, const char* var) const
 	{
-		return filename(prefix, var);
+		return filename(Base<T>::dataLocation(meshId, var), meshId, var);
+	}
+
+protected:
+	void write(unsigned int timestep, unsigned int id, const void* data)
+	{
+		if (Base<T>::localElements() == 0)
+			// Nothing to write
+			return;
+
+		size_t offset = 0;
+		if (Base<T>::variables()[id].hasTime)
+			offset = Base<T>::totalElements() * timestep;
+		offset += Base<T>::offset();
+		offset *=  Base<T>::variables()[id].count * Base<T>::variableSize(Base<T>::variables()[id].type);
+		write(m_fh[id], data, offset,
+			Base<T>::localElements() * Base<T>::variables()[id].count * Base<T>::variableSize(Base<T>::variables()[id].type));
+	}
+
+private:
+	void closeFiles()
+	{
+		if (m_fh) {
+			for (unsigned int i = 0; i < Base<T>::variables().size(); i++)
+				checkErr(::close(m_fh[i]));
+		}
 	}
 
 private:
 	/**
 	 * @return The file name for a given variable
 	 */
-	static std::string filename(const std::string &prefix, const char* var)
+	static std::string filename(const std::string &prefix, unsigned int meshId, const char* var)
 	{
-		return prefix + "_" + var + ".bin";
+		return prefix + "/mesh" + utils::StringUtils::toString(meshId) + "/" + var + ".bin";
 	}
 
 	static int open(const char* filename)
@@ -200,11 +204,12 @@ private:
 		}
 	}
 
-	template<typename T>
-	static void checkErr(T ret)
+	template<typename TT>
+	static void _checkErr(TT ret, const char* file, int line)
 	{
 		if (ret < 0)
-			logError() << "An POSIX error occurred in the XDMF writer:" << strerror(errno);
+			logError() << utils::nospace
+				<< "An POSIX error occurred in the XDMF writer (" << file << ": " << line << "): " << strerror(errno);
 	}
 
 	/**
@@ -213,15 +218,18 @@ private:
 	 * @param ret The return value
 	 * @param target The expected return value (> 0)
 	 */
-	template<typename T, typename U>
-	static void checkErr(T ret, U target)
+	template<typename TT, typename U>
+	static void _checkErr(TT ret, U target, const char* file, int line)
 	{
-		checkErr(ret);
-		if (ret != static_cast<T>(target))
-			logError() << "Error in XDMF writer:"
-				<< target << "bytes expected;" << ret << "bytes gotten";
+		_checkErr(ret, file, line);
+		if (ret != static_cast<TT>(target))
+			logError() << utils::nospace
+				<< "Error in XDMF writer (" << file << ": " << line << "): "
+				<< target << " bytes expected; " << ret << " bytes gotten";
 	}
 };
+
+#undef checkErr
 
 }
 

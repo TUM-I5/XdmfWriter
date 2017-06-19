@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-# Copyright (c) 2014-2016, Technische Universitaet Muenchen
+# Copyright (c) 2014-2017, Technische Universitaet Muenchen
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -8,11 +8,11 @@
 #
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
-# 
+#
 # 2. Redistributions in binary form must reproduce the above copyright notice
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-# 
+#
 # 3. Neither the name of the copyright holder nor the names of its
 #    contributors may be used to endorse or promote products derived from this
 #    software without specific prior written permission.
@@ -81,14 +81,14 @@ def CheckHDF5FortranInclude(context):
     context.Message("Checking for Fortran HDF5 module... ")
     ret = context.TryCompile(hdf5_fortran_prog_src, '.f90')
     context.Result(ret)
-    
+
     return ret
 
 def CheckV18API(context, h5cc):
     context.Message('Checking for HDF5 v18 API... ')
     ret = context.TryAction(h5cc + ' -showconfig | fgrep v18')[0]
     context.Result(ret)
-    
+
     return ret
 
 def generate(env, required = False, parallel = False, fortran = False, **kw):
@@ -99,7 +99,7 @@ def generate(env, required = False, parallel = False, fortran = False, **kw):
                                          'CheckLibWithHeader': CheckLibWithHeader,
                                          'CheckHDF5FortranInclude' : CheckHDF5FortranInclude,
                                          'CheckV18API' : CheckV18API})
-    
+
     # Find h5cc or h5pcc
     h5ccs = ['h5cc', 'h5pcc']
     if parallel:
@@ -126,7 +126,7 @@ def generate(env, required = False, parallel = False, fortran = False, **kw):
 
     # Add the lib path
     env.AppendUnique(LIBPATH=flags['LIBPATH'])
-    
+
     if fortran:
         # Fortran module file
         ret = conf.CheckHDF5FortranInclude()
@@ -137,7 +137,7 @@ def generate(env, required = False, parallel = False, fortran = False, **kw):
             else:
                 conf.Finish()
                 return
-            
+
         # Fortran library
         ret = conf.CheckLib('hdf5_fortran')
         if not ret:
@@ -147,7 +147,7 @@ def generate(env, required = False, parallel = False, fortran = False, **kw):
             else:
                 conf.Finish()
                 return
-        
+
     ret = conf.CheckLibWithHeader(flags['LIBS'][0], 'hdf5.h', 'c', extra_libs=flags['LIBS'][1:])
     if not ret:
         if required:
@@ -156,16 +156,18 @@ def generate(env, required = False, parallel = False, fortran = False, **kw):
         else:
             conf.Finish()
             return
-        
+
     # Check API Mapping
     if not conf.CheckV18API(h5cc):
         # TODO We might need to extent this list
         conf.env.Append(CPPDEFINES=['H5Dcreate_vers=2',
                                     'H5Dopen_vers=2',
+                                    'H5Gcreate_vers=2',
+                                    'H5Gopen_vers=2',
                                     'H5Acreate_vers=2',
                                     'H5Eget_auto_vers=2',
                                     'H5Eset_auto_vers=2'])
-            
+
     conf.Finish()
 
 def exists(env):

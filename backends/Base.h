@@ -43,6 +43,7 @@
 
 #include <string>
 #include <vector>
+#include <sys/stat.h>
 
 #include "utils/env.h"
 #include "utils/logger.h"
@@ -99,10 +100,10 @@ private:
 	/** Rank of this process */
 	int m_rank;
 
-	std::string m_filePrefix;
+	std::string m_pathPrefix;
 
 	/** The file name prefix but without directories (required for the XML file) */
-	std::string m_backendPrefix;
+	std::string m_filePrefix;
 
 	std::vector<VariableData> m_variableData;
 
@@ -158,12 +159,12 @@ public:
 	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
 		// Store file and backend prefix
+		m_pathPrefix = outputPrefix;
 		m_filePrefix = outputPrefix;
-		m_backendPrefix = outputPrefix;
 		// Remove all directories from prefix
-		size_t pos = m_backendPrefix.find_last_of('/');
+		size_t pos = m_filePrefix.find_last_of('/');
 		if (pos != std::string::npos)
-			m_backendPrefix = m_backendPrefix.substr(pos+1);
+			m_filePrefix = m_filePrefix.substr(pos+1);
 
 		m_variableData = variableData;
 
@@ -202,6 +203,8 @@ public:
 					static_cast<unsigned long>(it->count * variableSize(it->type)));
 			}
 			m_bufferSize *= m_localElems;
+		} else {
+			m_ioComm = m_comm;
 		}
 #endif // USE_MPI
 	}
@@ -229,7 +232,7 @@ public:
 	virtual void close()
 	{
 #ifdef USE_MPI
-		if (m_ioComm != MPI_COMM_NULL) {
+		if (m_ioComm != MPI_COMM_NULL && m_ioComm != m_comm) {
 			MPI_Comm_free(&m_ioComm);
 			m_ioComm = MPI_COMM_NULL;
 		}
@@ -258,7 +261,7 @@ public:
 	 */
 	virtual std::string dataLocation(unsigned int meshId, const char* variable) const
 	{
-		return m_backendPrefix;
+		return m_filePrefix;
 	}
 
 protected:
@@ -280,6 +283,15 @@ protected:
 	{
 		return m_comm;
 	}
+
+	/**
+	 * The communicator that only includes
+	 * the I/O ranks
+	 */
+	MPI_Comm ioComm() const
+	{
+		return m_ioComm;
+	}
 #endif // USE_MPI
 
 	int rank() const
@@ -287,9 +299,9 @@ protected:
 		return m_rank;
 	}
 
-	const std::string& filePrefix() const
+	const std::string& pathPrefix() const
 	{
-		return m_filePrefix;
+		return m_pathPrefix;
 	}
 
 	unsigned long totalElements() const

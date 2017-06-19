@@ -166,10 +166,13 @@ int main(int argc, char* argv[])
 #endif // USE_MPI
 
 	utils::Args args;
-	args.addOption("timesteps", 't', "the total number of time steps (default 10)", utils::Args::Required, false);
-	args.addOption("size", 's', "the inital number of cells in each dimension (default 10)", utils::Args::Required, false);
-	args.addOption("const", 'c', "the number of timesteps the mesh stays constant (default 2)", utils::Args::Required, false);
-	args.addOption("start", 0, "the timestep where benchmark should start (default 0)", utils::Args::Required, false);
+#ifdef USE_HDF
+	args.addOption("posix", 0, "use POSIX output (default: false)", utils::Args::No, false);
+#endif // USE_HDF
+	args.addOption("timesteps", 't', "the total number of time steps (default: 10)", utils::Args::Required, false);
+	args.addOption("size", 's', "the inital number of cells in each dimension (default: 10)", utils::Args::Required, false);
+	args.addOption("const", 'c', "the number of timesteps the mesh stays constant (default: 2)", utils::Args::Required, false);
+	args.addOption("start", 0, "the timestep where benchmark should start (default: 0)", utils::Args::Required, false);
 	args.addOption("no-vertex-filter", 'v', "disable the vertex filter", utils::Args::No, false);
 	args.addOption("no-partition", 'p', "skip partition information", utils::Args::No, false);
 	args.addAdditionalOption("filename", "the output file name");
@@ -207,8 +210,14 @@ int main(int argc, char* argv[])
 
 	const unsigned int start = args.getArgument<unsigned int>("start", 0);
 
+	xdmfwriter::BackendType type = xdmfwriter::POSIX;
+#ifdef USE_HDF
+	if (!args.isSet("posix"))
+		type = xdmfwriter::H5;
+#endif // USE_HDF
+
 	xdmfwriter::XdmfWriter<xdmfwriter::HEXAHEDRON, double> writer(
-			xdmfwriter::POSIX,
+			type,
 			args.getAdditionalArgument<const char*>("filename"),
 			start);
 

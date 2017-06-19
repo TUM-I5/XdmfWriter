@@ -4,7 +4,7 @@
  *
  * @author Sebastian Rettenberger <sebastian.rettenberger@tum.de>
  *
- * @copyright Copyright (c) 2014-2015, Technische Universitaet Muenchen.
+ * @copyright Copyright (c) 2014-2017, Technische Universitaet Muenchen.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -40,6 +40,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <glob.h>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -85,15 +86,16 @@ public:
 
 		m_varNames.push_back("b");
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(m_rank, "test", m_varNames);
-		writer0.init(4, m_cells, 5, m_vertices);
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "test");
+		writer0.init(m_varNames, std::vector<const char*>());
+		writer0.setMesh(4, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
 			setData(i, data[i]);
 
 			writer0.addTimeStep(i);
-			writer0.writeData(0, data[i]);
-			writer0.writeData(1, data[i]);
+			writer0.writeCellData(0, data[i]);
+			writer0.writeCellData(1, data[i]);
 		}
 
 		writer0.close();
@@ -120,14 +122,15 @@ public:
 		float data[4];
 
 		// TODO this currently tests failures only
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(m_rank, "test", m_varNames);
-		writer0.init(4, m_cells, 5, m_vertices);
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "test");
+		writer0.init(m_varNames, std::vector<const char*>());
+		writer0.setMesh(4, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
 			setData(i, data);
 
 			writer0.addTimeStep(i);
-			writer0.writeData(0, data);
+			writer0.writeCellData(0, data);
 		}
 
 		writer0.close();
@@ -139,14 +142,15 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(m_rank, "test", m_varNames);
-		writer1.init(3, m_cells, 5, m_vertices);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(type(), "test");
+		writer1.init(m_varNames, std::vector<const char*>());
+		writer1.setMesh(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 5; i++) {
 			setData(i, data);
 
 			writer1.addTimeStep(i);
-			writer1.writeData(0, data);
+			writer1.writeCellData(0, data);
 		}
 
 		writer1.close();
@@ -156,34 +160,38 @@ public:
 		// Move output files
 		if (m_rank == 0) {
 #ifdef USE_HDF
-			TS_ASSERT_EQUALS(rename("test.h5", "test1.h5"), 0);
+			TS_ASSERT_EQUALS(rename("test_cell.h5", "test1_cell.h5"), 0);
+			TS_ASSERT_EQUALS(rename("test_vertex.h5", "test1_vertex.h5"), 0);
 #else // USE_HDF
-			TS_ASSERT_EQUALS(rename("test_a.bin", "test1_a.bin"), 0);
+			TS_ASSERT_EQUALS(rename("test_cell", "test1_cell"), 0);
+			TS_ASSERT_EQUALS(rename("test_vertex", "test1_vertex"), 0);
 #endif // USE_HDF
 			TS_ASSERT_EQUALS(rename("test.xdmf", "test1.xdmf"), 0);
 		}
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(m_rank, "test", m_varNames);
-		writer2a.init(3, m_cells, 5, m_vertices);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(type(), "test");
+		writer2a.init(m_varNames, std::vector<const char*>());
+		writer2a.setMesh(3, m_cells, 5, m_vertices);
 
 		for (int i = 0; i < 3; i++) {
 			setData(i, data);
 
 			writer2a.addTimeStep(i);
-			writer2a.writeData(0, data);
+			writer2a.writeCellData(0, data);
 		}
 		writer2a.close();
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(m_rank, "test", m_varNames, 3);
-		writer2b.init(3, m_cells, 5, m_vertices);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(type(), "test", 3);
+		writer2b.init(m_varNames, std::vector<const char*>());
+		writer2b.setMesh(3, m_cells, 5, m_vertices, true);
 
 		for (int i = 3; i < 5; i++) {
 			setData(i, data);
 
 			writer2b.addTimeStep(i);
-			writer2b.writeData(0, data);
+			writer2b.writeCellData(0, data);
 		}
 		writer2b.close();
 
@@ -197,10 +205,10 @@ public:
 		std::string f2(std::istreambuf_iterator<char>(fs2), eos);
 		TS_ASSERT_EQUALS(f1, f2);
 
-		double data1[3*3*4];
+		float data1[3*3*5];
 		load("test1", data1, sizeof(data1));
 
-		double data2[3*3*4];
+		float data2[3*3*5];
 		load("test", data2, sizeof(data2));
 
 		TS_ASSERT_EQUALS(memcmp(data1, data2, sizeof(data1)), 0);
@@ -210,47 +218,62 @@ public:
 		if (m_rank == 0) {
 			unlink("test.xdmf");
 			unlinkDataFiles();
-			unlinkDataFiles("test", true);
 			unlink("test1.xdmf");
 			unlinkDataFiles("test1");
 		}
 	}
 
 private:
-	void setData(int step, double* data) const
+	void setData(int step, float* data) const
 	{
 		for (int i = 0; i < 3; i++)
 			data[i] = i + 10 * step + 100 * m_rank;
 	}
 
 private:
-	static void unlinkDataFiles(const char* base = "test", bool backup = false)
+	static xdmfwriter::BackendType type()
 	{
 #ifdef USE_HDF
-		const char* files[1] = {".h5"};
+		return xdmfwriter::H5;
 #else // USE_HDF
-		const char* files[5] = {"_connect.bin", "_geometry.bin", "_partition.bin", "_a.bin", "_b.bin"};
+		return xdmfwriter::POSIX;
+#endif // USE_HDF
+	}
+
+	static void unlinkDataFiles(const char* base = "test")
+	{
+#ifdef USE_HDF
+		const char* files[2] = {"_cell.h5", "_vertex.h5"};
+		const char* dirs[0] = {};
+#else // USE_HDF
+		const char* files[5] = {"_cell/mesh0/connect.bin", "_vertex/mesh0/geometry.bin", "_cell/mesh0/partition.bin", "_cell/mesh0/a.bin", "_cell/mesh0/b.bin"};
+		const char* dirs[4] = {"_cell/mesh0", "_vertex/mesh0", "_cell", "_vertex"};
 #endif // USE_HDF
 
 		const unsigned int numFiles = sizeof(files)/sizeof(const char*);
 
 		for (unsigned int i = 0; i < numFiles; i++) {
 			std::string file = std::string(base) + files[i];
-			if (backup)
-				file += ".bak";
 			unlink(file.c_str());
+		}
+
+		const unsigned int numDirs = sizeof(dirs)/sizeof(const char*);
+
+		for (unsigned int i = 0; i < numDirs; i++) {
+			std::string dir = std::string(base) + dirs[i];
+			rmdir(dir.c_str());
 		}
 	}
 
-	static void load(const char* base, double* buffer, size_t size)
+	static void load(const char* base, float* buffer, size_t size)
 	{
 #ifdef USE_HDF
-		std::string file = std::string(base) + ".h5";
+		std::string file = std::string(base) + "_cell.h5";
 		hid_t h5f = H5Fopen(file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-		hid_t h5d = H5Dopen(h5f, "/a", H5P_DEFAULT);
-		TS_ASSERT_LESS_THAN_EQUALS(0, H5Dread(h5d, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, buffer));
+		hid_t h5d = H5Dopen(h5f, "/mesh0/a", H5P_DEFAULT);
+		TS_ASSERT_LESS_THAN_EQUALS(0, H5Dread(h5d, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, buffer));
 #else // USE_HDF
-		std::string file = std::string(base) + "_a.bin";
+		std::string file = std::string(base) + "_cell/mesh0/a.bin";
 		int fh = open64(file.c_str(), O_RDONLY);
 		TS_ASSERT_LESS_THAN_EQUALS(0, fh);
 		TS_ASSERT_EQUALS(read(fh, buffer, size), size);

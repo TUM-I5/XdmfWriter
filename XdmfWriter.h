@@ -287,7 +287,8 @@ public:
 
 		// Add a new mesh to the backend
 		unsigned int localSize[2] = {numCells, numVertices};
-		m_backend.setMesh(m_meshId, m_totalSize, localSize, offset);
+		// Use the old mesh id for restarts
+		m_backend.setMesh((restarting ? m_meshId-1 : m_meshId), m_totalSize, localSize, offset);
 
 		if (restarting)
 			// Can skip writing the mesh if we are restarting

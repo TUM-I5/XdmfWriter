@@ -40,7 +40,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
 
 #include "utils/stringutils.h"
 
@@ -90,7 +89,7 @@ public:
 		Base<T>::setMesh(meshId, totalElements, localElements, offset);
 
 		// Backup the old folder an create a new one
-		std::string folder = Base<T>::filePrefix() + "/mesh" + utils::StringUtils::toString(meshId);
+		std::string folder = Base<T>::pathPrefix() + "/mesh" + utils::StringUtils::toString(meshId);
 
 		if (Base<T>::rank() == 0) {
 			// Check if the folder still exists (if we run from a checkpoint)
@@ -111,7 +110,7 @@ public:
 
 		if (Base<T>::localElements() > 0) {
 			for (unsigned int i = 0; i < Base<T>::variables().size(); i++) {
-				m_fh[i] = open(filename(Base<T>::filePrefix(), meshId, Base<T>::variables()[i].name).c_str());
+				m_fh[i] = open(filename(Base<T>::pathPrefix(), meshId, Base<T>::variables()[i].name).c_str());
 			}
 		} else {
 			delete [] m_fh;

@@ -122,8 +122,10 @@ public:
 	void setMesh(unsigned int meshId,
 		unsigned long totalElements, unsigned int localElements, unsigned long offset)
 	{
+#ifdef USE_MPI
 		// Were we a writer rank before?
 		bool wasWriter = Base<T>::localElements() > 0;
+#endif // USE_MPI
 
 		Base<T>::setMesh(meshId, totalElements, localElements, offset);
 

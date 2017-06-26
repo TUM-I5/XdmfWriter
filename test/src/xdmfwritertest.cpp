@@ -177,7 +177,12 @@ int main(int argc, char* argv[])
 	args.addOption("no-partition", 'p', "skip partition information", utils::Args::No, false);
 	args.addAdditionalOption("filename", "the output file name");
 
-	args.parse(argc, argv);
+	if (args.parse(argc, argv) != utils::Args::Success) {
+#ifdef USE_MPI
+		MPI_Finalize();
+#endif // USE_MPI
+		return 1;
+	}
 
 	int rank = 0;
 	int nProcs = 1;

@@ -162,6 +162,16 @@ public:
 		return m_vertexData->numVariables();
 	}
 
+	unsigned long numAlignedCells() const
+	{
+		return m_cellData->alignedTotalElements();
+	}
+
+	unsigned long numAlignedVertices() const
+	{
+		return m_vertexData->alignedTotalElements();
+	}
+
 	std::string cellDataLocation(unsigned int meshId, const char* variable) const
 	{
 		return m_cellData->dataLocation(meshId, variable);

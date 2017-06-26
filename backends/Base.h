@@ -255,6 +255,14 @@ public:
 	}
 
 	/**
+	 * @return Total number of elements after alignment
+	 */
+	virtual unsigned long alignedTotalElements() const
+	{
+		return totalElements();
+	}
+
+	/**
 	 * @return The relative (to the XDMF file) data location in XMDF format
 	 *
 	 * @warning Subclasses have to override this function to return the complete location
@@ -317,6 +325,11 @@ protected:
 	unsigned long offset() const
 	{
 		return m_offset;
+	}
+
+	unsigned long blockSize() const
+	{
+		return m_blockSize;
 	}
 
 	const std::vector<VariableData>& variables() const

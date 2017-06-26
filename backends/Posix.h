@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "utils/mathutils.h"
 #include "utils/stringutils.h"
 
 #include "Base.h"
@@ -59,6 +60,8 @@ class Posix : public Base<T>
 private:
 	/** File handles */
 	int* m_fh;
+
+	unsigned long m_alignedTotalElements;
 
 public:
 	Posix() : Base<T>("Binary"),
@@ -87,6 +90,7 @@ public:
 		unsigned long totalElements, unsigned int localElements, unsigned long offset)
 	{
 		Base<T>::setMesh(meshId, totalElements, localElements, offset);
+		m_alignedTotalElements = utils::MathUtils::roundUp(totalElements, Base<T>::blockSize());
 
 		// Backup the old folder an create a new one
 		std::string folder = Base<T>::pathPrefix() + "/mesh" + utils::StringUtils::toString(meshId);
@@ -138,6 +142,11 @@ public:
 		m_fh = 0L;
 	}
 
+	unsigned long alignedTotalElements() const
+	{
+		return m_alignedTotalElements;
+	}
+
 	/**
 	 * @param var
 	 * @return The location name in the XDMF file for a data item
@@ -156,7 +165,7 @@ protected:
 
 		size_t offset = 0;
 		if (Base<T>::variables()[id].hasTime)
-			offset = Base<T>::totalElements() * timestep;
+			offset = m_alignedTotalElements * timestep;
 		offset += Base<T>::offset();
 		offset *=  Base<T>::variables()[id].count * Base<T>::variableSize(Base<T>::variables()[id].type);
 		write(m_fh[id], data, offset,

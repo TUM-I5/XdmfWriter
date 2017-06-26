@@ -38,7 +38,7 @@
 
 #include <cxxtest/TestSuite.h>
 
-#include "BlockBuffer.h"
+#include "backends/BlockBuffer.h"
 
 class TestBlockBuffer : public CxxTest::TestSuite
 {

@@ -207,7 +207,7 @@ public:
 		int *bucketSize = new int[m_numProcs];
 		memset(bucketSize, 0, sizeof(int)*m_numProcs);
 		for (unsigned int i = 0; i < numVertices; i++) {
-			assert(bucket[i] < m_numProcs);
+			assert(bucket[i] < static_cast<unsigned int>(m_numProcs));
 			bucketSize[bucket[i]]++;
 		}
 

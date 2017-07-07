@@ -145,6 +145,7 @@ public:
 		MPI_Comm_rank(comm, &m_rank);
 
 		m_backend.setComm(comm);
+		m_vertexFilter.setComm(comm);
 	}
 #endif // USE_MPI
 

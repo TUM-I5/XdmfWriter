@@ -127,7 +127,7 @@ public:
 		bool wasWriter = Base<T>::localElements() > 0;
 #endif // USE_MPI
 
-		Base<T>::setMesh(meshId, totalElements, localElements, offset);
+		Base<T>::setMesh(totalElements, localElements, offset);
 
 		// Close any open variables
 		closeVars();

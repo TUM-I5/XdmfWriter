@@ -164,12 +164,12 @@ public:
 
 	unsigned long numAlignedCells() const
 	{
-		return m_cellData->alignedTotalElements();
+		return m_cellData->totalElements();
 	}
 
 	unsigned long numAlignedVertices() const
 	{
-		return m_vertexData->alignedTotalElements();
+		return m_vertexData->totalElements();
 	}
 
 	std::string cellDataLocation(unsigned int meshId, const char* variable) const

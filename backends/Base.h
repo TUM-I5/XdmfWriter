@@ -47,6 +47,7 @@
 
 #include "utils/env.h"
 #include "utils/logger.h"
+#include "utils/mathutils.h"
 #include "utils/timeutils.h"
 
 #ifdef USE_MPI
@@ -172,42 +173,7 @@ public:
 	}
 
 	virtual void setMesh(unsigned int meshId,
-			unsigned long totalElements, unsigned int localElements, unsigned long offset)
-	{
-		m_totalElems = totalElements;
-		m_localElems = localElements;
-		m_offset = offset;
-
-		m_bufferSize = 0;
-#ifdef USE_MPI
-		// Create block buffer
-		if (m_blockSize > 1) {
-			m_blockBuffer.init(m_comm, localElements, sizeof(T), m_blockSize);
-
-			if (m_ioComm != MPI_COMM_NULL)
-				MPI_Comm_free(&m_ioComm);
-
-			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &m_ioComm);
-			m_localElems = m_blockBuffer.count();
-
-			m_offset = m_localElems;
-			if (m_offset > 0) {
-				MPI_Scan(MPI_IN_PLACE, &m_offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, m_ioComm);
-				m_offset -= m_localElems;
-			}
-
-			// Compute the max buffer space we need
-			for (std::vector<VariableData>::const_iterator it = m_variableData.begin();
-					it != m_variableData.end(); ++it) {
-				m_bufferSize = std::max(m_bufferSize,
-					static_cast<unsigned long>(it->count * variableSize(it->type)));
-			}
-			m_bufferSize *= m_localElems;
-		} else {
-			m_ioComm = m_comm;
-		}
-#endif // USE_MPI
-	}
+		unsigned long totalElements, unsigned int localElements, unsigned long offset) = 0;
 
 	/**
 	 * @param buffer A buffer that is large if enough and can be used for temporary storage
@@ -255,11 +221,11 @@ public:
 	}
 
 	/**
-	 * @return Total number of elements after alignment
+	 * @return Total number of elements after alignment (including alignment)
 	 */
-	virtual unsigned long alignedTotalElements() const
+	unsigned long totalElements() const
 	{
-		return totalElements();
+		return m_totalElems;
 	}
 
 	/**
@@ -273,6 +239,49 @@ public:
 	}
 
 protected:
+	void setMesh(unsigned long totalElements, unsigned int localElements, unsigned long offset, bool alignTotalElements = false)
+	{
+		m_totalElems = totalElements;
+		m_localElems = localElements;
+		m_offset = offset;
+
+		m_bufferSize = 0;
+#ifdef USE_MPI
+		// Create block buffer
+		if (m_blockSize > 1) {
+			m_blockBuffer.init(m_comm, localElements, sizeof(T), m_blockSize);
+
+			if (m_ioComm != MPI_COMM_NULL)
+				MPI_Comm_free(&m_ioComm);
+
+			MPI_Comm_split(m_comm, m_blockBuffer.count() > 0 ? 1 : MPI_UNDEFINED, 0, &m_ioComm);
+			m_localElems = m_blockBuffer.count();
+
+			if (alignTotalElements) {
+				m_totalElems = utils::MathUtils::roundUp(m_totalElems, Base<T>::blockSize() / sizeof(T));
+				// This will only change on the last rank
+				m_localElems = utils::MathUtils::roundUp(m_localElems, static_cast<unsigned int>(Base<T>::blockSize() / sizeof(T)));
+			}
+
+			m_offset = m_localElems;
+			if (m_offset > 0) {
+				MPI_Scan(MPI_IN_PLACE, &m_offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, m_ioComm);
+				m_offset -= m_localElems;
+			}
+
+			// Compute the max buffer space we need
+			for (std::vector<VariableData>::const_iterator it = m_variableData.begin();
+					it != m_variableData.end(); ++it) {
+				m_bufferSize = std::max(m_bufferSize,
+					static_cast<unsigned long>(it->count * variableSize(it->type)));
+			}
+			m_bufferSize *= m_localElems;
+		} else {
+			m_ioComm = m_comm;
+		}
+#endif // USE_MPI
+	}
+
 	/**
 	 * Backup an existing backend file
 	 */
@@ -312,11 +321,9 @@ protected:
 		return m_pathPrefix;
 	}
 
-	unsigned long totalElements() const
-	{
-		return m_totalElems;
-	}
-
+	/**
+	 * @return The local number of elements (including alignment)
+	 */
 	unsigned int localElements() const
 	{
 		return m_localElems;

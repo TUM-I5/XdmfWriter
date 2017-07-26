@@ -380,7 +380,7 @@ public:
 						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[0] << "</DataItem>" << std::endl
 						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
 							<< m_backend.format() << "\" Dimensions=\""
-							<< m_meshTimeStep << ' ' << alignedSize[0] << "\">"
+							<< (m_meshTimeStep + 1) << ' ' << alignedSize[0] << "\">"
 							<< m_backend.cellDataLocation(m_meshId-1, m_cellVariableNames[i])
 							<< "</DataItem>" << std::endl
 						<< "     </DataItem>" << std::endl
@@ -393,7 +393,7 @@ public:
 						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[1] << "</DataItem>" << std::endl
 						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
 							<< m_backend.format() << "\" Dimensions=\""
-							<< m_meshTimeStep << ' ' << alignedSize[1] << "\">"
+							<< (m_meshTimeStep + 1) << ' ' << alignedSize[1] << "\">"
 							<< m_backend.vertexDataLocation(m_meshId-1, m_vertexVariableNames[i])
 							<< "</DataItem>" << std::endl
 						<< "     </DataItem>" << std::endl

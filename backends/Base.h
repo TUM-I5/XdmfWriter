@@ -64,6 +64,7 @@ namespace backends
 
 enum VariableType
 {
+  DOUBLE,
 	FLOAT, // float or double
 	INT,
 	UNSIGNED_LONG
@@ -350,8 +351,10 @@ protected:
 	static unsigned int variableSize(VariableType type)
 	{
 		switch (type) {
+		case DOUBLE:
+		  return sizeof(double);
 		case FLOAT:
-			return sizeof(T);
+      return sizeof(float);
 		case INT:
 			return sizeof(int);
 		case UNSIGNED_LONG:
@@ -365,10 +368,10 @@ protected:
 	static MPI_Datatype variableMPIType(VariableType type)
 	{
 		switch (type) {
+		case DOUBLE:
+      return MPI_DOUBLE;
 		case FLOAT:
-			if (sizeof(T) == sizeof(float))
-				return MPI_FLOAT;
-			return MPI_DOUBLE;
+      return MPI_FLOAT;
 		case INT:
 			return MPI_INT;
 		case UNSIGNED_LONG:

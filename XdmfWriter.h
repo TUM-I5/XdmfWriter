@@ -135,6 +135,10 @@ public:
 		close();
 	}
 
+	constexpr static backends::VariableType getBackendVariableDataType() {
+	  return (REAL_SIZE == 8) ?  backends::DOUBLE : backends::FLOAT;
+	}
+
 #ifdef USE_MPI
 	/**
 	 * Sets the communicator that should be used. Default is MPI_COMM_WORLD.
@@ -165,21 +169,24 @@ public:
 		if (nProcs == 1)
 			m_useVertexFilter = false;
 
+    backends::VariableType CONCRETE_DATA_FP_TYPE = getBackendVariableDataType();
+
 		// Create variable data for the backend
 		std::vector<backends::VariableData> cellVariableData;
 		cellVariableData.push_back(backends::VariableData("connect", backends::UNSIGNED_LONG, internal::Topology<Topo>::size(), false));
 		if (writePartitionInfo)
 			cellVariableData.push_back(backends::VariableData("partition", backends::INT, 1, false));
+
 		for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
 				it != cellVariableNames.end(); ++it) {
-			cellVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
+			cellVariableData.push_back(backends::VariableData(*it, CONCRETE_DATA_FP_TYPE, 1, true));
 		}
 
 		std::vector<backends::VariableData> vertexVariableData;
-		vertexVariableData.push_back(backends::VariableData("geometry", backends::FLOAT, 3, false));
+		vertexVariableData.push_back(backends::VariableData("geometry", backends::DOUBLE, 3, false));
 		for (std::vector<const char*>::const_iterator it = vertexVariableNames.begin();
 				it != vertexVariableNames.end(); ++it) {
-			vertexVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
+			vertexVariableData.push_back(backends::VariableData(*it, CONCRETE_DATA_FP_TYPE, 1, true));
 		}
 
 		// Open the backend
@@ -414,7 +421,8 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-	void writeCellData(unsigned int id, const T *data)
+	template<typename FLOAT_TYPE>
+	void writeCellData(unsigned int id, const FLOAT_TYPE *data)
 	{
 		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
 

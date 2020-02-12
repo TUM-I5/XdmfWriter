@@ -374,14 +374,14 @@ private:
 	static hid_t uniqueH5Type(VariableType type)
 	{
 		switch (type) {
-		case FLOAT:
-			if (sizeof(T) == sizeof(float))
-				return H5T_IEEE_F32LE;
-			return H5T_IEEE_F64LE;
-		case INT:
-			return H5T_STD_U32LE;
-		case UNSIGNED_LONG:
-			return H5T_STD_U64LE;
+		  case DOUBLE:
+        return H5T_IEEE_F64LE;
+		  case FLOAT:
+		    return H5T_IEEE_F32LE;
+		  case INT:
+			  return H5T_STD_U32LE;
+		  case UNSIGNED_LONG:
+		  	return H5T_STD_U64LE;
 		}
 
 		return -1;
@@ -390,14 +390,14 @@ private:
 	static hid_t nativeH5Type(VariableType type)
 	{
 		switch (type) {
-		case FLOAT:
-			if (sizeof(T) == sizeof(float))
-				return H5T_NATIVE_FLOAT;
-			return H5T_NATIVE_DOUBLE;
-		case INT:
-			return H5T_NATIVE_UINT;
-		case UNSIGNED_LONG:
-			return H5T_NATIVE_ULONG;
+		  case DOUBLE:
+        return H5T_NATIVE_DOUBLE;
+		  case FLOAT:
+        return H5T_NATIVE_FLOAT;
+		  case INT:
+			  return H5T_NATIVE_UINT;
+		  case UNSIGNED_LONG:
+			  return H5T_NATIVE_ULONG;
 		}
 
 		return -1;

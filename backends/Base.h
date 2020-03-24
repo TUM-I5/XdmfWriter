@@ -158,7 +158,9 @@ public:
 	}
 #endif // USE_MPI
 
-	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
+	virtual void open(const std::string &outputPrefix,
+	                  const std::vector<VariableData> &variableData,
+	                  bool create = true)
 	{
 		// Store file and backend prefix
 		m_pathPrefix = outputPrefix;
@@ -183,8 +185,9 @@ public:
 	{
 #ifdef USE_MPI
 		if (m_blockBuffer.isInitialized()) {
-			m_blockBuffer.exchange(data, variableMPIType(m_variableData[id].type),
-				m_variableData[id].count, buffer);
+			m_blockBuffer.exchange(data,
+			                       variableMPIType(m_variableData[id].type),
+			                       m_variableData[id].count, buffer);
 			write(timestep, id, buffer);
 		} else {
 #endif // USE_MPI
@@ -240,7 +243,10 @@ public:
 	}
 
 protected:
-	void setMesh(unsigned long totalElements, unsigned int localElements, unsigned long offset, bool alignTotalElements = false)
+	void setMesh(unsigned long totalElements,
+	             unsigned int localElements,
+	             unsigned long offset,
+	             bool alignTotalElements = false)
 	{
 		m_totalElems = totalElements;
 		m_localElems = localElements;
@@ -273,8 +279,7 @@ protected:
 			// Compute the max buffer space we need
 			for (std::vector<VariableData>::const_iterator it = m_variableData.begin();
 					it != m_variableData.end(); ++it) {
-				m_bufferSize = std::max(m_bufferSize,
-					static_cast<unsigned long>(it->count * variableSize(it->type)));
+				m_bufferSize = std::max(m_bufferSize, static_cast<unsigned long>(it->count * variableSize(it->type)));
 			}
 			m_bufferSize *= m_localElems;
 		} else {

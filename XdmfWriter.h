@@ -135,10 +135,6 @@ public:
 		close();
 	}
 
-	constexpr static backends::VariableType getBackendVariableDataType() {
-	  return (REAL_SIZE == 8) ?  backends::DOUBLE : backends::FLOAT;
-	}
-
 #ifdef USE_MPI
 	/**
 	 * Sets the communicator that should be used. Default is MPI_COMM_WORLD.
@@ -153,8 +149,10 @@ public:
 	}
 #endif // USE_MPI
 
-	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames,
-			bool useVertexFilter = true, bool writePartitionInfo = true)
+	void init(const std::vector<const char*> &cellVariableNames,
+	          const std::vector<const char*> &vertexVariableNames,
+			      bool useVertexFilter = true,
+			      bool writePartitionInfo = true)
 	{
 		m_cellVariableNames = cellVariableNames;
 		m_vertexVariableNames = vertexVariableNames;
@@ -261,7 +259,11 @@ public:
 	 * @param restarting Set this to <code>true</code> if the codes restarts from a checkpoint
 	 *  and the XDMF writer should continue with the old mesh
 	 */
-	void setMesh(unsigned int numCells, const unsigned int* cells, unsigned int numVertices, const T *vertices, bool restarting = false)
+	void setMesh(unsigned int numCells,
+	             const unsigned int* cells,
+	             unsigned int numVertices,
+	             const T *vertices,
+	             bool restarting = false)
 	{
 #ifdef USE_MPI
 		// Apply vertex filter
@@ -271,13 +273,17 @@ public:
 			m_vertexFilter.filter(numVertices, vertices);
 
 			if (!restarting) {
-				vertexRemover.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
+				vertexRemover.init(numVertices,
+				                   numVertices - m_vertexFilter.numLocalVertices(),
+				                   m_vertexFilter.duplicates());
 				vertices = static_cast<const T*>(vertexRemover.filter(vertices));
 			}
 
 			// Set the vertex data filter
 			if (m_backend.numVertexVars() > 0)
-				m_vertexDataFilter.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
+				m_vertexDataFilter.init(numVertices,
+				                        numVertices - m_vertexFilter.numLocalVertices(),
+				                        m_vertexFilter.duplicates());
 
 			numVertices = m_vertexFilter.numLocalVertices();
 		}
@@ -494,7 +500,15 @@ private:
 				<< "\" GridType=\"Uniform\">";
 	}
 
-private:
+	/**
+	 * Returns a concrete data type for the Data variables
+	 * */
+	constexpr static backends::VariableType getBackendVariableDataType() {
+	  return (REAL_SIZE == 8) ?  backends::DOUBLE : backends::FLOAT;
+	}
+
+
+  private:
 	static const unsigned int MAX_TIMESTEP_SPACE = 12;
 };
 

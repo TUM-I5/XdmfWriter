@@ -340,8 +340,12 @@ protected:
 		checkH5Err(h5VarMemSpace);
 
 		// Do the actual writting
-		checkH5Err(H5Dwrite(m_hdfVars[id], nativeH5Type(variable.type), h5VarMemSpace,
-				h5VarSpace, m_hdfAccessList, data));
+		checkH5Err(H5Dwrite(m_hdfVars[id],
+		                    nativeH5Type(variable.type),
+		                    h5VarMemSpace,
+		                    h5VarSpace,
+		                    m_hdfAccessList,
+		                    data));
 
 		checkH5Err(H5Sclose(h5VarSpace));
 		checkH5Err(H5Sclose(h5VarMemSpace));

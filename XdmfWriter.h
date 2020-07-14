@@ -109,6 +109,8 @@ private:
 
 	bool m_writePartitionInfo;
 
+	bool m_writeClusteringInfo;
+
 	/** Total number of cells/vertices */
 	unsigned long m_totalSize[2];
 
@@ -123,7 +125,7 @@ public:
 		m_backend(backendType),
 		m_flushInterval(0),
 		m_timeStep(timeStep), m_meshId(0), m_meshTimeStep(0),
-		m_useVertexFilter(true), m_writePartitionInfo(true)
+		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeClusteringInfo(false)
 	{
 #ifdef USE_MPI
 		setComm(MPI_COMM_WORLD);
@@ -150,13 +152,14 @@ public:
 #endif // USE_MPI
 
 	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames,
-			bool useVertexFilter = true, bool writePartitionInfo = true)
+			bool useVertexFilter = true, bool writePartitionInfo = true, bool writeClusteringInfo = false)
 	{
 		m_cellVariableNames = cellVariableNames;
 		m_vertexVariableNames = vertexVariableNames;
 
 		m_useVertexFilter = useVertexFilter;
 		m_writePartitionInfo = writePartitionInfo;
+    m_writeClusteringInfo = writeClusteringInfo;
 
 		int nProcs = 1;
 #ifdef USE_MPI
@@ -170,7 +173,11 @@ public:
 		cellVariableData.push_back(backends::VariableData("connect", backends::UNSIGNED_LONG, internal::Topology<Topo>::size(), false));
 		if (writePartitionInfo)
 			cellVariableData.push_back(backends::VariableData("partition", backends::INT, 1, false));
-		for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
+
+		if (writeClusteringInfo)
+      cellVariableData.push_back(backends::VariableData("clustering", backends::INT, 1, false));
+
+    for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
 				it != cellVariableNames.end(); ++it) {
 			cellVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
 		}
@@ -373,6 +380,14 @@ public:
 							<< "</DataItem>" << std::endl
 						<< "    </Attribute>" << std::endl;
 			}
+      if (m_writeClusteringInfo) {
+        m_xdmfFile << "    <Attribute Name=\"clustering\" Center=\"Cell\">" << std::endl
+                   << "     <DataItem  NumberType=\"Int\" Precision=\"4\" Format=\""
+                   << m_backend.format() << "\" Dimensions=\"" << m_totalSize[0] << "\">"
+                   << m_backend.cellDataLocation(m_meshId-1, "clustering")
+                   << "</DataItem>" << std::endl
+                   << "    </Attribute>" << std::endl;
+      }
 			for (size_t i = 0; i < m_cellVariableNames.size(); i++) {
 				m_xdmfFile << "    <Attribute Name=\"" << m_cellVariableNames[i] << "\" Center=\"Cell\">" << std::endl
 						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[0] << "\">" << std::endl
@@ -409,6 +424,23 @@ public:
 		m_meshTimeStep++;
 	}
 
+  /**
+   * Write clustering data for each cell
+   *
+   * Note: has no affect if the user didn't enable the functionality while passing parameters into
+   *       <code>init</code>  method
+   *
+   * @param data comes from the caller
+   */
+  void writeClusteringInfo(const unsigned int *data)
+  {
+    SCOREP_USER_REGION("XDMFWriter_writeClustering", SCOREP_USER_REGION_TYPE_FUNCTION);
+    if (m_writeClusteringInfo) {
+      const int ClusteringId = (m_writePartitionInfo ? 2 : 1);
+      m_backend.writeCellData(0, ClusteringId, data);
+    }
+  }
+
 	/**
 	 * Write cell data for one variable at the current time step
 	 *
@@ -417,8 +449,9 @@ public:
 	void writeCellData(unsigned int id, const T *data)
 	{
 		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
-
-		m_backend.writeCellData(m_meshTimeStep-1, id + (m_writePartitionInfo ? 2 : 1), data);
+    int idShift = (m_writePartitionInfo ? 2 : 1);
+    idShift += (m_writeClusteringInfo ? 1 : 0);
+    m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
 	}
 
 	/**

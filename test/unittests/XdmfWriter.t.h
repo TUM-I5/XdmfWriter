@@ -86,7 +86,7 @@ public:
 
 		m_varNames.push_back("b");
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "./test");
 		writer0.init(m_varNames, std::vector<const char*>());
 		writer0.setMesh(4, m_cells, 5, m_vertices);
 
@@ -103,7 +103,7 @@ public:
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		float dataFile[5][3*4];
-		load("test", dataFile[0], sizeof(dataFile));
+		load("./test", dataFile[0], sizeof(dataFile));
 		for (int i = 0; i < 5; i++) {
 			TS_ASSERT_EQUALS(memcmp(data[i], &dataFile[i][4*m_rank], 4*sizeof(float)), 0);
 		}
@@ -111,7 +111,7 @@ public:
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		if (m_rank == 0) {
-			unlink("test.xdmf");
+			unlink("./test.xdmf");
 			unlinkDataFiles();
 		}
 	}
@@ -122,7 +122,7 @@ public:
 		float data[4];
 
 		// TODO this currently tests failures only
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "./test");
 		writer0.init(m_varNames, std::vector<const char*>());
 		writer0.setMesh(4, m_cells, 5, m_vertices);
 
@@ -136,13 +136,13 @@ public:
 		writer0.close();
 
 		if (m_rank == 0) {
-			unlink("test.xdmf");
+			unlink("./test.xdmf");
 			unlinkDataFiles();
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(type(), "test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(type(), "./test");
 		writer1.init(m_varNames, std::vector<const char*>());
 		writer1.setMesh(3, m_cells, 5, m_vertices);
 
@@ -160,16 +160,16 @@ public:
 		// Move output files
 		if (m_rank == 0) {
 #ifdef USE_HDF
-			TS_ASSERT_EQUALS(rename("test_cell.h5", "test1_cell.h5"), 0);
-			TS_ASSERT_EQUALS(rename("test_vertex.h5", "test1_vertex.h5"), 0);
+			TS_ASSERT_EQUALS(rename("./test_cell.h5", "./test1_cell.h5"), 0);
+			TS_ASSERT_EQUALS(rename("./test_vertex.h5", "./test1_vertex.h5"), 0);
 #else // USE_HDF
-			TS_ASSERT_EQUALS(rename("test_cell", "test1_cell"), 0);
-			TS_ASSERT_EQUALS(rename("test_vertex", "test1_vertex"), 0);
+			TS_ASSERT_EQUALS(rename("./test_cell", "./test1_cell"), 0);
+			TS_ASSERT_EQUALS(rename("./test_vertex", "./test1_vertex"), 0);
 #endif // USE_HDF
-			TS_ASSERT_EQUALS(rename("test.xdmf", "test1.xdmf"), 0);
+			TS_ASSERT_EQUALS(rename("./test.xdmf", "./test1.xdmf"), 0);
 		}
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(type(), "test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(type(), "./test");
 		writer2a.init(m_varNames, std::vector<const char*>());
 		writer2a.setMesh(3, m_cells, 5, m_vertices);
 
@@ -183,7 +183,7 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(type(), "test", 3);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(type(), "./test", 3);
 		writer2b.init(m_varNames, std::vector<const char*>());
 		writer2b.setMesh(3, m_cells, 5, m_vertices, true);
 
@@ -198,28 +198,28 @@ public:
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		// Compare resulting files
-		std::ifstream fs1("test1.xdmf");
-		std::ifstream fs2("test.xdmf");
+		std::ifstream fs1("./test1.xdmf");
+		std::ifstream fs2("./test.xdmf");
 		std::istreambuf_iterator<char> eos;
 		std::string f1(std::istreambuf_iterator<char>(fs1), eos);
 		std::string f2(std::istreambuf_iterator<char>(fs2), eos);
 		TS_ASSERT_EQUALS(f1, f2);
 
 		float data1[3*3*5];
-		load("test1", data1, sizeof(data1));
+		load("./test1", data1, sizeof(data1));
 
 		float data2[3*3*5];
-		load("test", data2, sizeof(data2));
+		load("./test", data2, sizeof(data2));
 
 		TS_ASSERT_EQUALS(memcmp(data1, data2, sizeof(data1)), 0);
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		if (m_rank == 0) {
-			unlink("test.xdmf");
+			unlink("./test.xdmf");
 			unlinkDataFiles();
-			unlink("test1.xdmf");
-			unlinkDataFiles("test1");
+			unlink("./test1.xdmf");
+			unlinkDataFiles("./test1");
 		}
 	}
 
@@ -240,7 +240,7 @@ private:
 #endif // USE_HDF
 	}
 
-	static void unlinkDataFiles(const char* base = "test")
+	static void unlinkDataFiles(const char* base = "./test")
 	{
 #ifdef USE_HDF
 		const char* files[2] = {"_cell.h5", "_vertex.h5"};

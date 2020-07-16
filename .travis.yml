@@ -1,4 +1,4 @@
-dist: xenial
+dist: bionic
 language: cpp
 comiler:
  - gcc
@@ -8,11 +8,9 @@ before_install:
  - sudo apt-get update -qq
 
 install:
- - sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev libhdf5-openmpi-10 hdf5-tools libhdf5-openmpi-dev cmake
+ - sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake
 
 before_script:
- - echo "export TRAVIS_HOME=$TRAVIS_HOME" | cat - ~/.bashrc > ~/.bashrc.mod
- - mv -v ~/.bashrc.mod ~/.bashrc
  - export PATH=$PATH:$TRAVIS_BUILD_DIR/submodules/cxxtest/bin
  - export CTEST_OUTPUT_ON_FAILURE=1
 

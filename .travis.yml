@@ -2,7 +2,6 @@ dist: bionic
 language: cpp
 comiler:
  - gcc
- - clang
 
 before_install:
  - sudo apt-get update -qq
@@ -15,6 +14,7 @@ before_script:
  - export CTEST_OUTPUT_ON_FAILURE=1
 
 script:
+ - echo "$(uname -r)" && echo "$(uname -a)"
  - cd test/ && mkdir build && cd build
  - cmake -DWITH_UNITTEST=ON -DWITH_HDF5=ON -DWITH_MPI=ON -S .. && make && make test
  - make clean && cmake -E remove ./CMakeCache.txt && cmake -DWITH_UNITTEST=ON -DWITH_HDF5=ON -DWITH_MPI=OFF -S .. && make && make test

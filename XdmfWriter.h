@@ -47,6 +47,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 #include "utils/env.h"
 #include "utils/logger.h"
@@ -64,7 +65,7 @@ namespace xdmfwriter
 /**
  * Writes data in XDMF format
  */
-template<TopoType Topo, typename T>
+template<TopoType Topo, typename T, typename D>
 class XdmfWriter
 {
 private:
@@ -79,7 +80,7 @@ private:
 	std::fstream m_xdmfFile;
 
 	/** The backend for large scale I/O */
-	backends::Backend<T> m_backend;
+	backends::Backend<T, D> m_backend;
 
 	/** Names of the cell variables that should be written */
 	std::vector<const char*> m_cellVariableNames;
@@ -393,7 +394,7 @@ public:
 						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[0] << "\">" << std::endl
 						<< "      <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"XML\" Dimensions=\"3 2\">"
 						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[0] << "</DataItem>" << std::endl
-						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(D) << "\" Format=\""
 							<< m_backend.format() << "\" Dimensions=\""
 							<< (m_meshTimeStep + 1) << ' ' << alignedSize[0] << "\">"
 							<< m_backend.cellDataLocation(m_meshId-1, m_cellVariableNames[i])
@@ -446,30 +447,33 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-	void writeCellData(unsigned int id, const T *data)
-	{
-		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+  template<typename Type>
+  void writeCellData(unsigned int id, const Type *data)
+  {
+    SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+    static_assert(std::is_same<Type, D>::value, "expected a pointer to type D");
     int idShift = (m_writePartitionInfo ? 2 : 1);
     idShift += (m_writeClusteringInfo ? 1 : 0);
     m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
-	}
+  }
 
 	/**
 	 * Write vertex data for one variable at the current time step
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-	void writeVertexData(unsigned int id, const T *data)
+  template<typename Type>
+  void writeVertexData(unsigned int id, const Type *data)
 	{
-		SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+    SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+    static_assert(std::is_same<Type, T>::value, "expected a pointer to type T");
+    // Filter duplicates if the vertex filter is enabled
+    const void* tmp = data;
+    if (m_useVertexFilter)
+      tmp = m_vertexDataFilter.filter(data);
 
-		// Filter duplicates if the vertex filter is enabled
-		const void* tmp = data;
-		if (m_useVertexFilter)
-			tmp = m_vertexDataFilter.filter(data);
-
-		m_backend.writeVertexData(m_meshTimeStep-1, id + 1, tmp);
-	}
+    m_backend.writeVertexData(m_meshTimeStep-1, id + 1, tmp);
+  }
 
 	/**
 	 * Flushes the data to disk

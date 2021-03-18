@@ -86,7 +86,7 @@ public:
 
 		m_varNames.push_back("b");
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "./test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float, float> writer0(type(), "./test");
 		writer0.init(m_varNames, std::vector<const char*>());
 		writer0.setMesh(4, m_cells, 5, m_vertices);
 
@@ -122,7 +122,7 @@ public:
 		float data[4];
 
 		// TODO this currently tests failures only
-		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float> writer0(type(), "./test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TRIANGLE, float, float> writer0(type(), "./test");
 		writer0.init(m_varNames, std::vector<const char*>());
 		writer0.setMesh(4, m_cells, 5, m_vertices);
 
@@ -142,7 +142,7 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer1(type(), "./test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float, float> writer1(type(), "./test");
 		writer1.init(m_varNames, std::vector<const char*>());
 		writer1.setMesh(3, m_cells, 5, m_vertices);
 
@@ -169,7 +169,7 @@ public:
 			TS_ASSERT_EQUALS(rename("./test.xdmf", "./test1.xdmf"), 0);
 		}
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2a(type(), "./test");
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float, float> writer2a(type(), "./test");
 		writer2a.init(m_varNames, std::vector<const char*>());
 		writer2a.setMesh(3, m_cells, 5, m_vertices);
 
@@ -183,7 +183,7 @@ public:
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float> writer2b(type(), "./test", 3);
+		xdmfwriter::XdmfWriter<xdmfwriter::TETRAHEDRON, float, float> writer2b(type(), "./test", 3);
 		writer2b.init(m_varNames, std::vector<const char*>());
 		writer2b.setMesh(3, m_cells, 5, m_vertices, true);
 

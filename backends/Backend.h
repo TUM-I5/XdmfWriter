@@ -58,23 +58,23 @@ enum BackendType {
 namespace backends
 {
 
-template<typename T>
+template<typename VertexType, typename CellDataType>
 class Backend
 {
 private:
 	/** Storage for cell data */
-	Base<T>* const m_cellData;
+	Base<CellDataType>* const m_cellData;
 
 	/** Storage for vertex data */
-	Base<T>* const m_vertexData;
+	Base<VertexType>* const m_vertexData;
 
 	/** The buffer for the block buffer */
 	void* m_buffer;
 
 public:
 	Backend(BackendType backendType)
-		: m_cellData(createHeavyDataStorage(backendType)),
-		m_vertexData(createHeavyDataStorage(backendType)),
+		: m_cellData(createHeavyDataStorage<CellDataType>(backendType)),
+		m_vertexData(createHeavyDataStorage<VertexType>(backendType)),
 		m_buffer(0L)
 	{
 	}
@@ -183,6 +183,7 @@ public:
 	}
 
 private:
+  template<typename T>
 	static Base<T>* createHeavyDataStorage(BackendType type)
 	{
 		switch(type) {

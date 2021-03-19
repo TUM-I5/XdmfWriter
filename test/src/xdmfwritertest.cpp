@@ -221,7 +221,7 @@ int main(int argc, char* argv[])
 		type = xdmfwriter::H5;
 #endif // USE_HDF
 
-	xdmfwriter::XdmfWriter<xdmfwriter::HEXAHEDRON, double, double> writer(
+	xdmfwriter::XdmfWriter<xdmfwriter::HEXAHEDRON, double> writer(
 			type,
 			args.getAdditionalArgument<const char*>("filename"),
 			start);

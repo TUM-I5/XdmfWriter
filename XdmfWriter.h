@@ -65,7 +65,7 @@ namespace xdmfwriter
 /**
  * Writes data in XDMF format
  */
-template<TopoType Topo, typename T, typename D>
+template<TopoType Topo, typename VertexDataType, typename CellDataType = VertexDataType>
 class XdmfWriter
 {
 private:
@@ -80,7 +80,7 @@ private:
 	std::fstream m_xdmfFile;
 
 	/** The backend for large scale I/O */
-	backends::Backend<T, D> m_backend;
+	backends::Backend<VertexDataType, CellDataType> m_backend;
 
 	/** Names of the cell variables that should be written */
 	std::vector<const char*> m_cellVariableNames;
@@ -89,10 +89,10 @@ private:
 	std::vector<const char*> m_vertexVariableNames;
 
 	/** Vertex filter (only used if vertex filter is enabled) */
-	internal::ParallelVertexFilter<T> m_vertexFilter;
+	internal::ParallelVertexFilter<VertexDataType> m_vertexFilter;
 
 	/** The buffer filter for vertex data (only used if vertex filter is enabled) */
-	internal::BufferFilter<sizeof(T)> m_vertexDataFilter;
+	internal::BufferFilter<sizeof(VertexDataType)> m_vertexDataFilter;
 
 	/** Only execute the flush on certain time steps */
 	unsigned int m_flushInterval;
@@ -262,18 +262,22 @@ public:
 	 * @param restarting Set this to <code>true</code> if the codes restarts from a checkpoint
 	 *  and the XDMF writer should continue with the old mesh
 	 */
-	void setMesh(unsigned int numCells, const unsigned int* cells, unsigned int numVertices, const T *vertices, bool restarting = false)
+	void setMesh(unsigned int numCells,
+	             const unsigned int* cells,
+	             unsigned int numVertices,
+	             const VertexDataType *vertices,
+	             bool restarting = false)
 	{
 #ifdef USE_MPI
 		// Apply vertex filter
-		internal::BufferFilter<3*sizeof(T)> vertexRemover;
+		internal::BufferFilter<3*sizeof(VertexDataType)> vertexRemover;
 		if (m_useVertexFilter) {
 			// Filter duplicate vertices
 			m_vertexFilter.filter(numVertices, vertices);
 
 			if (!restarting) {
 				vertexRemover.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
-				vertices = static_cast<const T*>(vertexRemover.filter(vertices));
+				vertices = static_cast<const VertexDataType*>(vertexRemover.filter(vertices));
 			}
 
 			// Set the vertex data filter
@@ -367,7 +371,7 @@ public:
 						<< "</DataItem>" << std::endl
 					<< "    </Topology>" << std::endl
 					<< "    <Geometry name=\"geo\" GeometryType=\"XYZ\" NumberOfElements=\"" << m_totalSize[1] << "\">" << std::endl
-					<< "     <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+					<< "     <DataItem NumberType=\"Float\" Precision=\"" << sizeof(VertexDataType) << "\" Format=\""
 						<< m_backend.format() << "\" Dimensions=\"" << m_totalSize[1] << " 3\">"
 						<< m_backend.vertexDataLocation(m_meshId-1, "geometry")
 						<< "</DataItem>" << std::endl
@@ -394,7 +398,7 @@ public:
 						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[0] << "\">" << std::endl
 						<< "      <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"XML\" Dimensions=\"3 2\">"
 						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[0] << "</DataItem>" << std::endl
-						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(D) << "\" Format=\""
+						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(CellDataType) << "\" Format=\""
 							<< m_backend.format() << "\" Dimensions=\""
 							<< (m_meshTimeStep + 1) << ' ' << alignedSize[0] << "\">"
 							<< m_backend.cellDataLocation(m_meshId-1, m_cellVariableNames[i])
@@ -407,7 +411,7 @@ public:
 						<< "     <DataItem ItemType=\"HyperSlab\" Dimensions=\"" << m_totalSize[1] << "\">" << std::endl
 						<< "      <DataItem NumberType=\"UInt\" Precision=\"4\" Format=\"XML\" Dimensions=\"3 2\">"
 						<< m_meshTimeStep << " 0 1 1 1 " << m_totalSize[1] << "</DataItem>" << std::endl
-						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(T) << "\" Format=\""
+						<< "      <DataItem NumberType=\"Float\" Precision=\"" << sizeof(VertexDataType) << "\" Format=\""
 							<< m_backend.format() << "\" Dimensions=\""
 							<< (m_meshTimeStep + 1) << ' ' << alignedSize[1] << "\">"
 							<< m_backend.vertexDataLocation(m_meshId-1, m_vertexVariableNames[i])
@@ -447,11 +451,9 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-  template<typename Type>
-  void writeCellData(unsigned int id, const Type *data)
+  void writeCellData(unsigned int id, const CellDataType *data)
   {
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
-    static_assert(std::is_same<Type, D>::value, "expected a pointer to type D");
     int idShift = (m_writePartitionInfo ? 2 : 1);
     idShift += (m_writeClusteringInfo ? 1 : 0);
     m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
@@ -462,11 +464,9 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-  template<typename Type>
-  void writeVertexData(unsigned int id, const Type *data)
+  void writeVertexData(unsigned int id, const VertexDataType *data)
 	{
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
-    static_assert(std::is_same<Type, T>::value, "expected a pointer to type T");
     // Filter duplicates if the vertex filter is enabled
     const void* tmp = data;
     if (m_useVertexFilter)

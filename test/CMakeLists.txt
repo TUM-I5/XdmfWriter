@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.5)
 project(tests)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+
 option(WITH_HDF5 "use HDF5" ON)
 option(WITH_UNITTEST "builds additional unit tests" ON)
 option(WITH_MPI "use MPI" ON)
@@ -42,7 +47,7 @@ endif()
 set(INCLUDES ${INCLUDES} ".." "../submodules")
 
 add_executable(xdmfwriter src/xdmfwritertest.cpp)
-target_link_libraries(xdmfwriter ${LIBS})
+target_link_libraries(xdmfwriter ${LIBS} stdc++fs)
 target_include_directories(xdmfwriter PUBLIC ${INCLUDES})
 target_compile_definitions(xdmfwriter PUBLIC ${DEFS})
 
@@ -64,7 +69,7 @@ function(parallel_cxx_test target source mpi_entry_point)
     # INCLUDES, LIBS and DEFS are given from the global scope defined above
     target_include_directories(${target} PUBLIC ${INCLUDES})
     target_compile_definitions(${target} PUBLIC ${DEFS})
-    target_link_libraries(${target} ${LIBS})
+    target_link_libraries(${target} ${LIBS} stdc++fs)
 
     # the original project always ran with 3 MPI processes
     set (test_parameters -np 3 "./${target}")

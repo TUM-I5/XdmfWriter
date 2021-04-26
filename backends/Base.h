@@ -44,6 +44,7 @@
 #include <string>
 #include <vector>
 #include <sys/stat.h>
+#include <filesystem>
 
 #include "utils/env.h"
 #include "utils/logger.h"
@@ -159,6 +160,12 @@ public:
 
 	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
+	  const auto path = std::filesystem::path(outputPrefix);
+	  const auto parentPath = path.parent_path();
+	  if (!std::filesystem::exists(path.parent_path())) {
+	    logError() << "Output error:" << std::filesystem::absolute(parentPath) << " does not exist. Aborting.";
+	  }
+
 		// Store file and backend prefix
 		m_pathPrefix = outputPrefix;
 		m_filePrefix = outputPrefix;

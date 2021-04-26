@@ -7,7 +7,11 @@ before_install:
  - sudo apt-get update -qq
 
 install:
- - sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake
+ - |
+  sudo apt-get install gcc-8 g++-8 gfortran-8 cmake
+  sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 100
+  sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 100
+  sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake
 
 before_script:
  - export PATH=$PATH:$TRAVIS_BUILD_DIR/submodules/cxxtest/bin

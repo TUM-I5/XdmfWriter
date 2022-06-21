@@ -219,7 +219,9 @@ public:
 		MPI_Alltoall(bucketSize, 1, MPI_INT, recvSize, 1, MPI_INT, m_comm);
 
 		unsigned int numSortVertices = 0;
-#ifdef _OPENMP
+#if defined(_OPENMP) && !defined(__NVCOMPILER)
+        // nvhpc@22.5 compiler corrupts the executable code near the omp `reduction` clause.
+        // Therefore, we compute `numSortVertices` without OpenMP.
 		#pragma omp parallel for schedule(static) reduction(+: numSortVertices)
 #endif
 		for (int i = 0; i < m_numProcs; i++)

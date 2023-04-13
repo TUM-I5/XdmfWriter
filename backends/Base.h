@@ -165,11 +165,11 @@ public:
 
 	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
-    #ifdef EXPERIMENTAL_FS
-    namespace fs = std::experimental::filesystem;
-    #else
-    namespace fs = std::filesystem;
-    #endif
+	  #ifdef EXPERIMENTAL_FS
+	  namespace fs = std::experimental::filesystem;
+	  #else
+	  namespace fs = std::filesystem;
+	  #endif
 	  const auto path = fs::path(outputPrefix);
 	  const auto parentPath = path.parent_path();
 	  if (!fs::exists(path.parent_path())) {

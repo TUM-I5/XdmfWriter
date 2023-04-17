@@ -44,7 +44,12 @@
 #include <string>
 #include <vector>
 #include <sys/stat.h>
+
+#ifdef EXPERIMENTAL_FS
+#include <experimental/filesystem>
+#else
 #include <filesystem>
+#endif
 
 #include "utils/env.h"
 #include "utils/logger.h"
@@ -160,10 +165,15 @@ public:
 
 	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
-	  const auto path = std::filesystem::path(outputPrefix);
+	  #ifdef EXPERIMENTAL_FS
+	  namespace fs = std::experimental::filesystem;
+	  #else
+	  namespace fs = std::filesystem;
+	  #endif
+	  const auto path = fs::path(outputPrefix);
 	  const auto parentPath = path.parent_path();
-	  if (!std::filesystem::exists(path.parent_path())) {
-	    logError() << "Output error:" << std::filesystem::absolute(parentPath) << " does not exist. Aborting.";
+	  if (!fs::exists(path.parent_path())) {
+	    logError() << "Output error:" << fs::absolute(parentPath) << " does not exist. Aborting.";
 	  }
 
 		// Store file and backend prefix

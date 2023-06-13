@@ -95,6 +95,11 @@ public:
 	}
 #endif // USE_MPI
 
+	void setBackupTimeStamp(const std::string& stamp) {
+		m_cellData->setBackupTimeStamp(stamp);
+		m_vertexData->setBackupTimeStamp(stamp);
+	}
+
 	void open(const std::string &outputPrefix,
 			const std::vector<VariableData> &cellVariableData, const std::vector<VariableData> &vertexVariableData,
 			bool create = true)

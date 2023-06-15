@@ -55,6 +55,7 @@
 #include "utils/logger.h"
 #include "utils/mathutils.h"
 #include "utils/timeutils.h"
+#include <optional>
 
 #ifdef USE_MPI
 #include "BlockBuffer.h"
@@ -103,6 +104,9 @@ private:
 	/** Communicator containing only I/O processes */
 	MPI_Comm m_ioComm;
 #endif // USE_MPI
+
+        /** Time stamp for file backuping */
+	std::optional<std::string> m_backupTimeStamp;
 
 	/** Rank of this process */
 	int m_rank;
@@ -162,6 +166,10 @@ public:
 		MPI_Comm_rank(comm, &m_rank);
 	}
 #endif // USE_MPI
+
+	void setBackupTimeStamp(const std::string& stamp) {
+		m_backupTimeStamp = stamp;
+	}
 
 	virtual void open(const std::string &outputPrefix, const std::vector<VariableData> &variableData, bool create = true)
 	{
@@ -308,7 +316,10 @@ protected:
 		struct stat statBuffer;
 		if (m_rank == 0 && stat(file.c_str(), &statBuffer) == 0) {
 			logWarning() << file << "already exists. Creating backup.";
-			rename(file.c_str(), (file + ".bak_" + utils::TimeUtils::timeAsString("%F_%T", time(0L))).c_str());
+			if (!m_backupTimeStamp.has_value()) {
+				m_backupTimeStamp = utils::TimeUtils::timeAsString("%F_%T", time(0L));
+			}
+			rename(file.c_str(), (file + ".bak_" + m_backupTimeStamp.value()).c_str());
 		}
 	}
 

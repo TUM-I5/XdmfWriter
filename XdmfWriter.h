@@ -152,6 +152,10 @@ public:
 	}
 #endif // USE_MPI
 
+        void setBackupTimeStamp(const std::string& timeStamp) {
+		m_backend.setBackupTimeStamp(timeStamp);
+        }
+
 	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames,
 			bool useVertexFilter = true, bool writePartitionInfo = true, bool writeClusteringInfo = false)
 	{

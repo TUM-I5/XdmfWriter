@@ -310,16 +310,17 @@ protected:
 	/**
 	 * Backup an existing backend file
 	 */
-	void backup(const std::string &file)
+	void backup(std::string const& prefix, std::string const& fileExention)
 	{
+                std::string fileName = prefix + fileExention;
 		// Backup any existing file
 		struct stat statBuffer;
-		if (m_rank == 0 && stat(file.c_str(), &statBuffer) == 0) {
-			logWarning() << file << "already exists. Creating backup.";
+		if (m_rank == 0 && stat(fileName.c_str(), &statBuffer) == 0) {
+			logWarning() << fileName << "already exists. Creating backup.";
 			if (!m_backupTimeStamp.has_value()) {
 				m_backupTimeStamp = utils::TimeUtils::timeAsString("%F_%T", time(0L));
 			}
-			rename(file.c_str(), (file + ".bak_" + m_backupTimeStamp.value()).c_str());
+			rename(fileName.c_str(), (prefix + ".bak_" + m_backupTimeStamp.value() + fileExention).c_str());
 		}
 	}
 

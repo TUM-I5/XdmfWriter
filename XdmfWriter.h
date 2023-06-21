@@ -76,6 +76,8 @@ private:
 	int m_rank;
 
 	std::string m_outputPrefix;
+        
+	std::optional<std::string> m_backupTimeStamp;
 
 	std::fstream m_xdmfFile;
 
@@ -153,6 +155,7 @@ public:
 #endif // USE_MPI
 
         void setBackupTimeStamp(const std::string& timeStamp) {
+                m_backupTimeStamp = timeStamp;
 		m_backend.setBackupTimeStamp(timeStamp);
         }
 
@@ -200,6 +203,8 @@ public:
 		// Write the XML file
 		if (m_rank == 0) {
 			std::string xdmfName = m_outputPrefix + ".xdmf";
+
+                        backup(m_outputPrefix);
 
 			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
 			m_xdmfFile.open(xdmfName.c_str());
@@ -525,6 +530,54 @@ private:
 	{
 		s << "<Grid Name=\"step_" << std::setw(MAX_TIMESTEP_SPACE) << std::setfill('0') << timestep << std::setfill(' ')
 				<< "\" GridType=\"Uniform\">";
+	}
+
+	/**
+	 * Backup an existing xdmf file
+	 */
+	void backup(const std::string &prefix)
+	{
+                std::string fileName = prefix + ".xdmf";
+		// Backup any existing file
+		struct stat statBuffer;
+		if (m_rank == 0 && stat(fileName.c_str(), &statBuffer) == 0) {
+			logWarning() << fileName << "already exists. Creating backup.";
+			if (!m_backupTimeStamp.has_value()) {
+				m_backupTimeStamp = utils::TimeUtils::timeAsString("%F_%T", time(0L));
+			}
+                        std::string newFile = prefix + ".bak_" + m_backupTimeStamp.value() + ".xdmf";
+                        std::ifstream in(fileName);
+                        std::ofstream out(newFile);
+		        size_t pos = prefix.find_last_of('/');
+
+                        // TODO: add _cell and _vertex
+                        std::string wordToReplace = (pos != std::string::npos) ? prefix.substr(pos+1) : prefix;
+                        std::string wordToReplaceWith = wordToReplace + ".bak_" + m_backupTimeStamp.value();
+
+                        if (!in) {
+                                std::cerr << "Could not open " << fileName << std::endl;
+                                return;
+                        }
+
+                        if (!out) {
+                                std::cerr << "Could not open " << newFile << std::endl;
+                                return;
+                        }
+
+                        std::string line;
+                        size_t len = wordToReplace.length();
+                        while (getline(in, line)) {
+                            size_t pos = line.find(wordToReplace);
+                            if (pos != std::string::npos) {
+                                line.replace(pos, len, wordToReplaceWith);
+                            }
+                            std::cout << line << std::endl;
+
+                            out << line << '\n';
+                        }
+			//rename(file.c_str(), (file + ".bak_" + m_backupTimeStamp.value()).c_str());
+
+		}
 	}
 
 private:

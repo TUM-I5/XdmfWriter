@@ -96,7 +96,7 @@ public:
 		// Create a backup of the file
 		if (create) {
 			// Backup existing file
-			Base<T>::backup(outputPrefix + fileExention());
+			Base<T>::backup(outputPrefix, fileExention());
 #ifdef PARALLEL
 			// Make sure the file is moved before continuing
 			MPI_Barrier(Base<T>::comm());

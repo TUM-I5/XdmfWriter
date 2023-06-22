@@ -318,7 +318,7 @@ protected:
 		if (m_rank == 0 && stat(fileName.c_str(), &statBuffer) == 0) {
 			logWarning() << fileName << "already exists. Creating backup.";
 			if (!m_backupTimeStamp.has_value()) {
-				m_backupTimeStamp = utils::TimeUtils::timeAsString("%F_%T", time(0L));
+				m_backupTimeStamp = utils::TimeUtils::timeAsString("%Y-%m-%d_%H-%M-%S", time(0L));
 			}
 			rename(fileName.c_str(), (prefix + ".bak_" + m_backupTimeStamp.value() + fileExention).c_str());
 		}

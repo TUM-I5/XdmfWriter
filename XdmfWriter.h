@@ -204,7 +204,7 @@ public:
 		if (m_rank == 0) {
 			std::string xdmfName = m_outputPrefix + ".xdmf";
 
-                        backup(m_outputPrefix);
+			backup(m_outputPrefix);
 
 			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
 			m_xdmfFile.open(xdmfName.c_str());
@@ -537,46 +537,43 @@ private:
 	 */
 	void backup(const std::string &prefix)
 	{
-                std::string fileName = prefix + ".xdmf";
+		std::string fileName = prefix + ".xdmf";
 		// Backup any existing file
 		struct stat statBuffer;
 		if (m_rank == 0 && stat(fileName.c_str(), &statBuffer) == 0) {
 			logWarning() << fileName << "already exists. Creating backup.";
 			if (!m_backupTimeStamp.has_value()) {
-				m_backupTimeStamp = utils::TimeUtils::timeAsString("%F_%T", time(0L));
+				m_backupTimeStamp = utils::TimeUtils::timeAsString("%Y-%m-%d_%H-%M-%S", time(0L));
 			}
-                        std::string newFile = prefix + ".bak_" + m_backupTimeStamp.value() + ".xdmf";
-                        std::ifstream in(fileName);
-                        std::ofstream out(newFile);
-		        size_t pos = prefix.find_last_of('/');
 
-                        // TODO: add _cell and _vertex
-                        std::string wordToReplace = (pos != std::string::npos) ? prefix.substr(pos+1) : prefix;
-                        std::string wordToReplaceWith = wordToReplace + ".bak_" + m_backupTimeStamp.value();
+			std::string newFile = prefix + ".bak_" + m_backupTimeStamp.value() + ".xdmf";
+			std::ifstream in(fileName);
+			if (!in) {
+				logError() << "Could not open " << fileName;
+			}
+			std::ofstream out(newFile);
+			if (!out) {
+				logError() << "Could not open " << newFile;
+			}
 
-                        if (!in) {
-                                std::cerr << "Could not open " << fileName << std::endl;
-                                return;
-                        }
+			size_t pos = prefix.find_last_of('/');
+			std::string wordToReplacePrefix = (pos != std::string::npos) ? prefix.substr(pos+1) : prefix;
+			auto replace = [&](std::string& line, std::string const& wordToReplace) {
+				std::string wordToReplaceWith = wordToReplace + ".bak_" + m_backupTimeStamp.value();
+				size_t len = wordToReplace.length();
+				size_t pos = line.find(wordToReplace);
+				if (pos != std::string::npos) {
+					line.replace(pos, len, wordToReplaceWith);
+				}
+			};
 
-                        if (!out) {
-                                std::cerr << "Could not open " << newFile << std::endl;
-                                return;
-                        }
-
-                        std::string line;
-                        size_t len = wordToReplace.length();
-                        while (getline(in, line)) {
-                            size_t pos = line.find(wordToReplace);
-                            if (pos != std::string::npos) {
-                                line.replace(pos, len, wordToReplaceWith);
-                            }
-                            std::cout << line << std::endl;
-
-                            out << line << '\n';
-                        }
-			//rename(file.c_str(), (file + ".bak_" + m_backupTimeStamp.value()).c_str());
-
+			std::string line;
+			while (getline(in, line)) {
+				replace(line, wordToReplacePrefix + "_cell");
+				replace(line, wordToReplacePrefix + "_vertex");
+				out << line << std::endl;
+			}
+			remove(fileName.c_str());
 		}
 	}
 

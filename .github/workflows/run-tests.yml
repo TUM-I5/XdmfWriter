@@ -1,0 +1,34 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build_and_test:
+    strategy:
+      fail-fast: false
+      matrix:
+        mpi: [ON, OFF]
+        hdf5: [ON, OFF]
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    - name: Install dependencies
+      run: |
+        sudo apt-get install gcc g++ gfortran cmake
+        sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake cxxtest
+    - name: build_and_test
+      run: |
+        cd test
+        mkdir build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi}} && cd build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi }}
+        ls -la ..
+        cmake -DWITH_UNITTEST=ON -DWITH_HDF5=${{ matrix.hdf5 }} -DWITH_MPI=${{ matrix.mpi }} -S ..
+        make
+        make test 

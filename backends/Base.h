@@ -310,9 +310,9 @@ protected:
 	/**
 	 * Backup an existing backend file
 	 */
-	void backup(std::string const& prefix, std::string const& fileExention)
+	void backup(std::string const& prefix, std::string const& fileExtension)
 	{
-                std::string fileName = prefix + fileExention;
+                std::string fileName = prefix + fileExtension;
 		// Backup any existing file
 		struct stat statBuffer;
 		if (m_rank == 0 && stat(fileName.c_str(), &statBuffer) == 0) {
@@ -320,7 +320,7 @@ protected:
 			if (!m_backupTimeStamp.has_value()) {
 				m_backupTimeStamp = utils::TimeUtils::timeAsString("%Y-%m-%d_%H-%M-%S", time(0L));
 			}
-			rename(fileName.c_str(), (prefix + ".bak_" + m_backupTimeStamp.value() + fileExention).c_str());
+			rename(fileName.c_str(), (prefix + ".bak_" + m_backupTimeStamp.value() + fileExtension).c_str());
 		}
 	}
 

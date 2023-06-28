@@ -72,7 +72,7 @@ function(parallel_cxx_test target source mpi_entry_point)
     target_link_libraries(${target} ${LIBS} stdc++fs)
 
     # the original project always ran with 3 MPI processes
-    set (test_parameters -np 3 "./${target}")
+    set (test_parameters -np 3 --oversubscribe "./${target}")
     add_test(NAME ${target} COMMAND "mpirun" ${test_parameters})
 endfunction(parallel_cxx_test)
 

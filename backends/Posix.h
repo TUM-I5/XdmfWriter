@@ -72,7 +72,7 @@ public:
 
 		if (create) {
 			if (Base<T>::rank() == 0) {
-				Base<T>::backup(outputPrefix);
+				Base<T>::backup(outputPrefix, "");
 				checkErr(mkdir(outputPrefix.c_str(), 0755));
 			}
 

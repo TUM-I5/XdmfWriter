@@ -96,7 +96,7 @@ public:
 		// Create a backup of the file
 		if (create) {
 			// Backup existing file
-			Base<T>::backup(outputPrefix, fileExention());
+			Base<T>::backup(outputPrefix, fileExtension());
 #ifdef PARALLEL
 			// Make sure the file is moved before continuing
 			MPI_Barrier(Base<T>::comm());
@@ -165,7 +165,7 @@ public:
 #endif // USE_MPI
 
 			// Assemble filename
-			std::string filename = Base<T>::pathPrefix() + fileExention();
+			std::string filename = Base<T>::pathPrefix() + fileExtension();
 
 			if (m_create)
 				m_hdfFile = H5Fcreate(filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, h5plist);
@@ -294,7 +294,7 @@ public:
 	 */
 	std::string dataLocation(unsigned int meshId, const char* var) const
 	{
-		return Base<T>::dataLocation(meshId, var) + fileExention() + ":/mesh" + utils::StringUtils::toString(meshId) + "/" + var;
+		return Base<T>::dataLocation(meshId, var) + fileExtension() + ":/mesh" + utils::StringUtils::toString(meshId) + "/" + var;
 	}
 
 protected:
@@ -366,7 +366,7 @@ private:
 	/**
 	 * @return The file extension for this backend
 	 */
-	static const char* fileExention()
+	static const char* fileExtension()
 	{
 		return ".h5";
 	}

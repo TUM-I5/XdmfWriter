@@ -199,12 +199,11 @@ public:
 
 		// Open the backend
 		m_backend.open(m_outputPrefix, cellVariableData, vertexVariableData, m_timeStep == 0);
+                backup(m_outputPrefix);
 
 		// Write the XML file
 		if (m_rank == 0) {
 			std::string xdmfName = m_outputPrefix + ".xdmf";
-
-			backup(m_outputPrefix);
 
 			std::ofstream(xdmfName.c_str(), std::ios::app).close(); // Create the file (if it does not exist)
 			m_xdmfFile.open(xdmfName.c_str());
@@ -536,7 +535,10 @@ private:
 	 * Backup an existing xdmf file
 	 */
 	void backup(const std::string &prefix)
-	{
+        {
+                if (m_timeStep != 0) {
+                         return;
+                }
 		std::string fileName = prefix + ".xdmf";
 		// Backup any existing file
 		struct stat statBuffer;
@@ -573,6 +575,7 @@ private:
 				replace(line, wordToReplacePrefix + "_vertex");
 				out << line << std::endl;
 			}
+			remove(fileName.c_str());
 		}
 	}
 

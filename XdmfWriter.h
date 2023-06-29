@@ -573,7 +573,6 @@ private:
 				replace(line, wordToReplacePrefix + "_vertex");
 				out << line << std::endl;
 			}
-			remove(fileName.c_str());
 		}
 	}
 

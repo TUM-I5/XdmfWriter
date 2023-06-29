@@ -41,7 +41,7 @@ if (WITH_HDF5)
     find_package(HDF5 REQUIRED)
     set(INCLUDES ${INCLUDES} ${HDF5_INCLUDE_DIRS})
     set(LIBS ${LIBS} ${HDF5_LIBRARIES})
-    set(DEFS ${DEFS} USE_HDF5)
+    set(DEFS ${DEFS} USE_HDF)
 endif()
 
 set(INCLUDES ${INCLUDES} ".." "../submodules")

@@ -183,15 +183,24 @@ private:
 
 	static int open(const char* filename)
 	{
-		int fh = open64(filename, O_WRONLY | O_CREAT,
+#ifdef __APPLE__
+		int fh = ::open(filename, O_WRONLY | O_CREAT,
 				S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+#else
+                int fh = open64(filename, O_WRONLY | O_CREAT,
+                                S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+#endif // __APPLE__
 		checkErr(fh);
 		return fh;
 	}
 
 	static void write(int fh, const void* buffer, size_t offset, size_t size)
 	{
-		checkErr(lseek64(fh, offset, SEEK_SET));
+#ifdef __APPLE__
+                checkErr(lseek(fh, offset, SEEK_SET));
+#else
+                checkErr(lseek64(fh, offset, SEEK_SET));
+#endif
 
 		const char* buf = reinterpret_cast<const char*>(buffer);
 		while (size > 0) {

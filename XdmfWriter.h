@@ -84,6 +84,9 @@ private:
 	/** The backend for large scale I/O */
 	backends::Backend<VertexDataType, CellDataType> m_backend;
 
+	/** Name of a possible extra int cell variable that should be written (only once) */
+	std::string m_extraIntCellVariableName;
+
 	/** Names of the cell variables that should be written */
 	std::vector<const char*> m_cellVariableNames;
 
@@ -112,7 +115,7 @@ private:
 
 	bool m_writePartitionInfo;
 
-	bool m_writeClusteringInfo;
+	bool m_writeExtraIntCellData;
 
 	/** Total number of cells/vertices */
 	unsigned long m_totalSize[2];
@@ -125,10 +128,10 @@ public:
 			const char* outputPrefix,
 			unsigned int timeStep = 0)
 		: m_rank(0), m_outputPrefix(outputPrefix),
-		m_backend(backendType),
+		m_backend(backendType), m_extraIntCellVariableName(""),
 		m_flushInterval(0),
 		m_timeStep(timeStep), m_meshId(0), m_meshTimeStep(0),
-		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeClusteringInfo(false)
+		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeExtraIntCellData(false)
 	{
 #ifdef USE_MPI
 		setComm(MPI_COMM_WORLD);
@@ -159,16 +162,16 @@ public:
 		m_backend.setBackupTimeStamp(timeStamp);
         }
 
-	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames,
-			bool useVertexFilter = true, bool writePartitionInfo = true, bool writeClusteringInfo = false)
+	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames, 
+			const char* extraIntCellVariableName = "", bool useVertexFilter = true, bool writePartitionInfo = true)
 	{
 		m_cellVariableNames = cellVariableNames;
 		m_vertexVariableNames = vertexVariableNames;
 
 		m_useVertexFilter = useVertexFilter;
 		m_writePartitionInfo = writePartitionInfo;
-    m_writeClusteringInfo = writeClusteringInfo;
-
+		m_extraIntCellVariableName = extraIntCellVariableName;
+		m_writeExtraIntCellData = !m_extraIntCellVariableName.empty();
 		int nProcs = 1;
 #ifdef USE_MPI
 		MPI_Comm_size(m_comm, &nProcs);
@@ -182,8 +185,8 @@ public:
 		if (writePartitionInfo)
 			cellVariableData.push_back(backends::VariableData("partition", backends::INT, 1, false));
 
-		if (writeClusteringInfo)
-      cellVariableData.push_back(backends::VariableData("clustering", backends::INT, 1, false));
+		if (m_writeExtraIntCellData)
+			cellVariableData.push_back(backends::VariableData(m_extraIntCellVariableName.c_str(), backends::INT, 1, false));
 
     for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
 				it != cellVariableNames.end(); ++it) {
@@ -393,11 +396,12 @@ public:
 							<< "</DataItem>" << std::endl
 						<< "    </Attribute>" << std::endl;
 			}
-      if (m_writeClusteringInfo) {
-        m_xdmfFile << "    <Attribute Name=\"clustering\" Center=\"Cell\">" << std::endl
+
+			if (m_writeExtraIntCellData) {
+        m_xdmfFile << "    <Attribute Name=\"" << m_extraIntCellVariableName.c_str() << "\" Center=\"Cell\">" << std::endl
                    << "     <DataItem  NumberType=\"Int\" Precision=\"4\" Format=\""
                    << m_backend.format() << "\" Dimensions=\"" << m_totalSize[0] << "\">"
-                   << m_backend.cellDataLocation(m_meshId-1, "clustering")
+                   << m_backend.cellDataLocation(m_meshId-1, m_extraIntCellVariableName.c_str())
                    << "</DataItem>" << std::endl
                    << "    </Attribute>" << std::endl;
       }
@@ -438,19 +442,16 @@ public:
 	}
 
   /**
-   * Write clustering data for each cell
-   *
-   * Note: has no affect if the user didn't enable the functionality while passing parameters into
-   *       <code>init</code>  method
+   * Write extra int cell (e.g. fault tag, clustering) data for each cell
    *
    * @param data comes from the caller
    */
-  void writeClusteringInfo(const unsigned int *data)
+  void writeExtraIntCellData(const unsigned int *data)
   {
-    SCOREP_USER_REGION("XDMFWriter_writeClustering", SCOREP_USER_REGION_TYPE_FUNCTION);
-    if (m_writeClusteringInfo) {
-      const int ClusteringId = (m_writePartitionInfo ? 2 : 1);
-      m_backend.writeCellData(0, ClusteringId, data);
+    SCOREP_USER_REGION("XDMFWriter_ExtraIntCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
+    if (m_writeExtraIntCellData) {
+      const int ExtraIntCellId = (m_writePartitionInfo ? 2 : 1);
+      m_backend.writeCellData(0, ExtraIntCellId, data);
     }
   }
 
@@ -463,7 +464,7 @@ public:
   {
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
     int idShift = (m_writePartitionInfo ? 2 : 1);
-    idShift += (m_writeClusteringInfo ? 1 : 0);
+    idShift += (m_writeExtraIntCellData ? 1 : 0);
     m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
   }
 

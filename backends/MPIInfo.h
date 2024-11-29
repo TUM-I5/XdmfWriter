@@ -39,7 +39,6 @@
 
 #include <mpi.h>
 
-#include "utils/arrayutils.h"
 #include "utils/env.h"
 #include "utils/stringutils.h"
 
@@ -66,7 +65,7 @@ public:
 			
 			MPI_Info_create(&info);
 		
-			for (unsigned int i = 0; i < utils::ArrayUtils::size(mpioHints); i++) {
+			for (unsigned int i = 0; i < 8; i++) {
 				std::string hint(mpioHints[i]);
 				utils::StringUtils::toUpper(hint);
 				std::string envName = "XDMFWRITER_MPIO_" + hint;

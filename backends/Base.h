@@ -135,6 +135,8 @@ private:
 	unsigned long m_bufferSize;
 
 protected:
+	utils::Env m_env{"XDMFWRITER_"};
+
 	Base(const char* format)
 		: m_format(format),
 #ifdef USE_MPI
@@ -194,7 +196,7 @@ public:
 
 		m_variableData = variableData;
 
-		m_blockSize = utils::Env::get<unsigned long>("XDMFWRITER_BLOCK_SIZE", 1);
+		m_blockSize = m_env.get<unsigned long>("BLOCK_SIZE", 1);
 	}
 
 	virtual void setMesh(unsigned int meshId,

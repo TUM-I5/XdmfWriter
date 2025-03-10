@@ -91,7 +91,7 @@ public:
 		Base<T>::open(outputPrefix, variableData, create);
 
 		// Check if we should use collective I/O
-		m_useCollective = utils::Env::get<bool>("XDMFWRITER_COLLECTIVE", true);
+		m_useCollective = Base<T>::m_env.template get<bool>("COLLECTIVE", true);
 
 		// Create a backup of the file
 		if (create) {
@@ -154,7 +154,7 @@ public:
 			checkH5Err(h5plist);
 			checkH5Err(H5Pset_libver_bounds(h5plist, H5F_LIBVER_LATEST, H5F_LIBVER_LATEST));
 			checkH5Err(H5Pset_meta_block_size(h5plist, 1024*1024));
-			hsize_t align = utils::Env::get<hsize_t>("XDMFWRITER_ALIGNMENT", 0);
+			hsize_t align = Base<T>::m_env.template get<hsize_t>("ALIGNMENT", 0);
 			if (align > 0)
 				checkH5Err(H5Pset_alignment(h5plist, 1, align));
 #ifdef USE_MPI
@@ -207,8 +207,8 @@ public:
 
 			// Get the chunk size
 			hsize_t varChunkDims[3] = {
-				utils::Env::get<hsize_t>("XDMFWRITER_TIME_CHUNK_SIZE", 1),
-				utils::Env::get<hsize_t>("XDMFWRITER_ELEMENT_CHUNK_SIZE", 0)
+				Base<T>::m_env.template get<hsize_t>("TIME_CHUNK_SIZE", 1),
+				Base<T>::m_env.template get<hsize_t>("ELEMENT_CHUNK_SIZE", 0)
 			};
 			if (varChunkDims[1] == 0)
 				// 0 elements -> all elements

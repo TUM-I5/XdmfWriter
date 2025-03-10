@@ -128,7 +128,7 @@ public:
 			const char* outputPrefix,
 			unsigned int timeStep = 0)
 		: m_rank(0), m_outputPrefix(outputPrefix),
-		m_backend(backendType), m_extraIntCellVariableName(""),
+		m_backend(backendType),
 		m_flushInterval(0),
 		m_timeStep(timeStep), m_meshId(0), m_meshTimeStep(0),
 		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeExtraIntCellData(false)
@@ -266,7 +266,7 @@ public:
 #endif // USE_MPI
 
 		// Get flush interval
-		m_flushInterval = utils::Env::get<unsigned int>("XDMFWRITER_FLUSH_INTERVAL", 1);
+		m_flushInterval = utils::Env("XDMFWRITER_").get<unsigned int>("FLUSH_INTERVAL", 1);
 	}
 
 	/**

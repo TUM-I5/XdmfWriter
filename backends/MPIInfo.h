@@ -38,6 +38,8 @@
 #define XDMF_WRITER_BACKENDS_MPIINFO_H
 
 #include <mpi.h>
+#include <string>
+#include <vector>
 
 #include "utils/env.h"
 #include "utils/stringutils.h"
@@ -56,7 +58,7 @@ public:
 		static MPI_Info info = MPI_INFO_NULL;
 		
 		if (info == MPI_INFO_NULL) {
-			static const char* mpioHints[] = {
+			static std::vector<std::string> mpioHints = {
 				"ind_rd_buffer_size", "ind_wr_buffer_size",
 				"romio_ds_read", "romio_ds_write", "cb_buffer_size",
 				"cb_nodes", "romio_cb_read", "romio_cb_write",
@@ -64,16 +66,18 @@ public:
 			};
 			
 			MPI_Info_create(&info);
+
+			utils::Env env("XDMFWRITER_MPIO_");
 		
-			for (unsigned int i = 0; i < 8; i++) {
+			for (unsigned int i = 0; i < mpioHints.size(); i++) {
 				std::string hint(mpioHints[i]);
 				utils::StringUtils::toUpper(hint);
-				std::string envName = "XDMFWRITER_MPIO_" + hint;
 				
-				const char* value = utils::Env::get<const char*>(envName.c_str(), 0L);
-				if (value)
-					MPI_Info_set(info, const_cast<char*>(mpioHints[i]),
-						const_cast<char*>(value));
+				const auto value = env.getOptional<std::string>(hint);
+				if (value.has_value()) {
+					MPI_Info_set(info, mpioHints[i].c_str(),
+						value.value().c_str());
+				}
 			}
 		}
 		

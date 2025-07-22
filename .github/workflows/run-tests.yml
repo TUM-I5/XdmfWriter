@@ -1,10 +1,7 @@
 name: Run Tests
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+  - push
 
 jobs:
   build_and_test:
@@ -20,15 +17,21 @@ jobs:
     - uses: actions/checkout@v3
       with:
         submodules: 'recursive'
-    - name: Install dependencies
+    - name: install-dependencies
       run: |
-        sudo apt-get install gcc g++ gfortran cmake
-        sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake cxxtest
-    - name: build_and_test
+        sudo apt-get install gcc g++ cmake
+        sudo apt-get install -qq openmpi-bin openmpi-common libopenmpi-dev hdf5-tools libhdf5-openmpi-dev cmake cxxtest ninja-build
+    - name: build
       run: |
         cd test
-        mkdir build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi}} && cd build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi }}
+        mkdir build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi}}
+        cd build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi }}
         ls -la ..
-        cmake -DWITH_UNITTEST=ON -DWITH_HDF5=${{ matrix.hdf5 }} -DWITH_MPI=${{ matrix.mpi }} -S ..
-        make
-        make test 
+        cmake -GNinja -DWITH_UNITTEST=ON -DWITH_HDF5=${{ matrix.hdf5 }} -DWITH_MPI=${{ matrix.mpi }} -S ..
+        ninja
+    - name: test
+      run: |
+        cd test
+        cd build_hdf5_${{ matrix.hdf5 }}_mpi_${{ matrix.mpi }}
+
+        ctest --rerun-failed --output-on-failure

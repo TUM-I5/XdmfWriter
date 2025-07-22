@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
 	MPI_Init(&argc, &argv);
 #endif // USE_MPI
 
-	utils::Args args;
+	utils::Args args("Xdmfwriter test application");
 #ifdef USE_HDF
 	args.addOption("posix", 0, "use POSIX output (default: false)", utils::Args::No, false);
 #endif // USE_HDF

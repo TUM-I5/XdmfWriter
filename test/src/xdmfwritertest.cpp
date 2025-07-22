@@ -225,9 +225,8 @@ int main(int argc, char* argv[])
 			type,
 			args.getAdditionalArgument<const char*>("filename"),
 			start);
-			std::string extraIntVarName = "";
 
-	writer.init(cellVariables, vertexVariables, extraIntVarName.c_str(),
+	writer.init(cellVariables, vertexVariables, {},
 		!args.isSet("no-vertex-filter"), !args.isSet("no-partition"));
 
 	unsigned int numCells;

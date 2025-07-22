@@ -85,7 +85,7 @@ private:
 	backends::Backend<VertexDataType, CellDataType> m_backend;
 
 	/** Name of a possible extra int cell variable that should be written (only once) */
-	std::string m_extraIntCellVariableName;
+	std::vector<std::string> m_extraIntCellVariableNames;
 
 	/** Names of the cell variables that should be written */
 	std::vector<const char*> m_cellVariableNames;
@@ -115,7 +115,7 @@ private:
 
 	bool m_writePartitionInfo;
 
-	bool m_writeExtraIntCellData;
+	size_t m_writeExtraIntCellData;
 
 	/** Total number of cells/vertices */
 	unsigned long m_totalSize[2];
@@ -131,7 +131,7 @@ public:
 		m_backend(backendType),
 		m_flushInterval(0),
 		m_timeStep(timeStep), m_meshId(0), m_meshTimeStep(0),
-		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeExtraIntCellData(false)
+		m_useVertexFilter(true), m_writePartitionInfo(true), m_writeExtraIntCellData(0)
 	{
 #ifdef USE_MPI
 		setComm(MPI_COMM_WORLD);
@@ -163,41 +163,44 @@ public:
         }
 
 	void init(const std::vector<const char*> &cellVariableNames, const std::vector<const char*> &vertexVariableNames, 
-			const char* extraIntCellVariableName = "", bool useVertexFilter = true, bool writePartitionInfo = true)
+			const std::vector<std::string>& extraIntCellVariableNames = {}, bool useVertexFilter = true, bool writePartitionInfo = true)
 	{
 		m_cellVariableNames = cellVariableNames;
 		m_vertexVariableNames = vertexVariableNames;
 
 		m_useVertexFilter = useVertexFilter;
 		m_writePartitionInfo = writePartitionInfo;
-		m_extraIntCellVariableName = extraIntCellVariableName;
-		m_writeExtraIntCellData = !m_extraIntCellVariableName.empty();
+		m_extraIntCellVariableNames = extraIntCellVariableNames;
+		m_writeExtraIntCellData = m_extraIntCellVariableNames.size();
 		int nProcs = 1;
 #ifdef USE_MPI
 		MPI_Comm_size(m_comm, &nProcs);
 #endif // USE_MPI
-		if (nProcs == 1)
+		if (nProcs == 1) {
 			m_useVertexFilter = false;
+		}
 
 		// Create variable data for the backend
 		std::vector<backends::VariableData> cellVariableData;
 		cellVariableData.push_back(backends::VariableData("connect", backends::UNSIGNED_LONG, internal::Topology<Topo>::size(), false));
-		if (writePartitionInfo)
-			cellVariableData.push_back(backends::VariableData("partition", backends::INT, 1, false));
+		if (writePartitionInfo) {
+			cellVariableData.emplace_back("partition", backends::INT, 1, false);
+		}
 
-		if (m_writeExtraIntCellData)
-			cellVariableData.push_back(backends::VariableData(m_extraIntCellVariableName.c_str(), backends::INT, 1, false));
+		for (const auto& data : m_extraIntCellVariableNames) {
+			cellVariableData.emplace_back(data.c_str(), backends::INT, 1, false);
+		}
 
-    for (std::vector<const char*>::const_iterator it = cellVariableNames.begin();
+    for (auto it = cellVariableNames.begin();
 				it != cellVariableNames.end(); ++it) {
-			cellVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
+			cellVariableData.emplace_back(*it, backends::FLOAT, 1, true);
 		}
 
 		std::vector<backends::VariableData> vertexVariableData;
-		vertexVariableData.push_back(backends::VariableData("geometry", backends::FLOAT, 3, false));
-		for (std::vector<const char*>::const_iterator it = vertexVariableNames.begin();
+		vertexVariableData.emplace_back("geometry", backends::FLOAT, 3, false);
+		for (auto it = vertexVariableNames.begin();
 				it != vertexVariableNames.end(); ++it) {
-			vertexVariableData.push_back(backends::VariableData(*it, backends::FLOAT, 1, true));
+			vertexVariableData.emplace_back(*it, backends::FLOAT, 1, true);
 		}
 
 		// Open the backend
@@ -215,11 +218,11 @@ public:
 					<< "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>" << std::endl
 					<< "<Xdmf Version=\"2.0\">" << std::endl
 					<< " <Domain>" << std::endl
-					<< "  <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">" << std::endl;
+					<< R"(  <Grid Name="TimeSeries" GridType="Collection" CollectionType="Temporal">)" << std::endl;
 
-			if (m_timeStep == 0)
+			if (m_timeStep == 0) {
 				closeXdmf();
-			else {
+			} else {
 				// Jump the correct position in the file
 				std::ostringstream tStartStream;
 				timeStepStartXdmf(m_timeStep-1, tStartStream);
@@ -227,14 +230,16 @@ public:
 
 				// Find beginning of the (correct) time step
 				std::string line;
-				std::size_t pos;
+				std::size_t pos = 0;
 				while (getline(m_xdmfFile, line)) {
 					pos = line.find(tStart);
-					if (pos != std::string::npos)
+					if (pos != std::string::npos) {
 						break;
+                    }
 				}
-				if (!m_xdmfFile)
+				if (!m_xdmfFile) {
 					logError() << "Unable to find time step for appending";
+                }
 
 				// Extract mesh id and mesh step
 				std::istringstream ss(line.substr(pos + tStart.size()));
@@ -249,8 +254,9 @@ public:
 
 				// Find end of this time step
 				while (getline(m_xdmfFile, line)) {
-					if (line.find("</Grid>") != std::string::npos)
+					if (line.find("</Grid>") != std::string::npos) {
 						break;
+                    }
 				}
 			}
 		}
@@ -292,8 +298,9 @@ public:
 			}
 
 			// Set the vertex data filter
-			if (m_backend.numVertexVars() > 0)
+			if (m_backend.numVertexVars() > 0) {
 				m_vertexDataFilter.init(numVertices, numVertices - m_vertexFilter.numLocalVertices(), m_vertexFilter.duplicates());
+			}
 
 			numVertices = m_vertexFilter.numLocalVertices();
 		}
@@ -315,27 +322,30 @@ public:
 		// Use the old mesh id for restarts
 		m_backend.setMesh((restarting ? m_meshId-1 : m_meshId), m_totalSize, localSize, offset);
 
-		if (restarting)
+		if (restarting) {
 			// Can skip writing the mesh if we are restarting
 			return;
+		}
 
 		// Add vertex offset to all cells and convert to unsigned long
-		unsigned long *h5Cells = new unsigned long[numCells * internal::Topology<Topo>::size()];
+		auto *h5Cells = new unsigned long[numCells * internal::Topology<Topo>::size()];
 #ifdef USE_MPI
 		if (m_useVertexFilter) {
 #ifdef _OPENMP
 			#pragma omp parallel for schedule(static)
 #endif // _OPENMP
-			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++)
+			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++) {
 				h5Cells[i] = m_vertexFilter.globalIds()[cells[i]];
+			}
 		} else
 #endif // USE_MPI
 		{
 #ifdef _OPENMP
 			#pragma omp parallel for schedule(static)
 #endif // _OPENMP
-			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++)
+			for (size_t i = 0; i < numCells*internal::Topology<Topo>::size(); i++) {
 				h5Cells[i] = cells[i] + offset[1];
+			}
 		}
 
 		m_backend.writeCellData(0, 0, h5Cells);
@@ -343,12 +353,13 @@ public:
 
 		if (m_writePartitionInfo) {
 			// Create partition information
-			unsigned int *partInfo = new unsigned int[numCells];
+			auto *partInfo = new unsigned int[numCells];
 #ifdef _OPENMP
 			#pragma omp parallel for schedule(static)
 #endif // _OPENMP
-			for (unsigned int i = 0; i < numCells; i++)
+			for (unsigned int i = 0; i < numCells; i++) {
 				partInfo[i] = m_rank;
+			}
 
 			m_backend.writeCellData(0, 1, partInfo);
 
@@ -397,11 +408,11 @@ public:
 						<< "    </Attribute>" << std::endl;
 			}
 
-			if (m_writeExtraIntCellData) {
-        m_xdmfFile << "    <Attribute Name=\"" << m_extraIntCellVariableName.c_str() << "\" Center=\"Cell\">" << std::endl
+			for (const auto& data : m_extraIntCellVariableNames) {
+        m_xdmfFile << "    <Attribute Name=\"" << data.c_str() << "\" Center=\"Cell\">" << std::endl
                    << "     <DataItem  NumberType=\"Int\" Precision=\"4\" Format=\""
                    << m_backend.format() << "\" Dimensions=\"" << m_totalSize[0] << "\">"
-                   << m_backend.cellDataLocation(m_meshId-1, m_extraIntCellVariableName.c_str())
+                   << m_backend.cellDataLocation(m_meshId-1, data.c_str())
                    << "</DataItem>" << std::endl
                    << "    </Attribute>" << std::endl;
       }
@@ -446,12 +457,12 @@ public:
    *
    * @param data comes from the caller
    */
-  void writeExtraIntCellData(const unsigned int *data)
+  void writeExtraIntCellData(int id, const unsigned int *data)
   {
     SCOREP_USER_REGION("XDMFWriter_ExtraIntCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
-    if (m_writeExtraIntCellData) {
-      const int ExtraIntCellId = (m_writePartitionInfo ? 2 : 1);
-      m_backend.writeCellData(0, ExtraIntCellId, data);
+    if (m_writeExtraIntCellData > id) {
+      const int extraIntCellId = id + (m_writePartitionInfo ? 2 : 1);
+      m_backend.writeCellData(0, extraIntCellId, data);
     }
   }
 
@@ -464,7 +475,7 @@ public:
   {
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
     int idShift = (m_writePartitionInfo ? 2 : 1);
-    idShift += (m_writeExtraIntCellData ? 1 : 0);
+    idShift += m_writeExtraIntCellData;
     m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
   }
 
@@ -478,8 +489,9 @@ public:
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
     // Filter duplicates if the vertex filter is enabled
     const void* tmp = data;
-    if (m_useVertexFilter)
+    if (m_useVertexFilter) {
       tmp = m_vertexDataFilter.filter(data);
+	}
 
     m_backend.writeVertexData(m_meshTimeStep-1, id + 1, tmp);
   }
@@ -491,8 +503,9 @@ public:
 	{
 		SCOREP_USER_REGION("XDMFWriter_flush", SCOREP_USER_REGION_TYPE_FUNCTION);
 
-		if (m_timeStep % m_flushInterval == 0)
+		if (m_timeStep % m_flushInterval == 0) {
 			m_backend.flush();
+		}
 	}
 
 	/**

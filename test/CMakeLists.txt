@@ -60,7 +60,7 @@ function(parallel_cxx_test target source mpi_entry_point)
 
     add_custom_command(
             OUTPUT "${CPP_FULL_NAME}"
-            COMMAND ${CXXTESTGEN} --runner=ErrorPrinter --main=cxxtest_main --output "${CPP_FULL_NAME}" "${source}"
+            COMMAND ${CXXTEST_PYTHON_TESTGEN_EXECUTABLE} --error-printer --main=cxxtest_main --output "${CPP_FULL_NAME}" "${source}"
             DEPENDS "${source}"
     )
     add_executable(${target} ${mpi_entry_point} ${CPP_FULL_NAME})

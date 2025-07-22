@@ -79,11 +79,9 @@ endfunction(parallel_cxx_test)
 if (WITH_UNITTEST)
     enable_testing()
 
-    # add cxxtest from submodules to the project
-    set(CXXTEST_PATH ../submodules/cxxtest)
-    get_filename_component(CXXTEST_CMAKE "${CXXTEST_PATH}/build_tools/cmake/CxxTest.cmake" ABSOLUTE)
-    include("${CXXTEST_CMAKE}")
-    set(INCLUDES ${INCLUDES} ${CXXTEST_INCLUDES})
+    # add cxxtest to the project
+    find_package( CxxTest REQUIRED )
+    set(INCLUDES ${INCLUDES} ${CXXTEST_INCLUDE_DIR})
 
     # find all necessary files
     set(MPI_ENTRY_POINT ${CMAKE_SOURCE_DIR}/unittests/main.cpp)

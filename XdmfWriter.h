@@ -457,11 +457,11 @@ public:
    *
    * @param data comes from the caller
    */
-  void writeExtraIntCellData(int id, const unsigned int *data)
+  void writeExtraIntCellData(std::size_t id, const unsigned int *data)
   {
     SCOREP_USER_REGION("XDMFWriter_ExtraIntCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
     if (m_writeExtraIntCellData > id) {
-      const int extraIntCellId = id + (m_writePartitionInfo ? 2 : 1);
+      const auto extraIntCellId = id + (m_writePartitionInfo ? 2 : 1);
       m_backend.writeCellData(0, extraIntCellId, data);
     }
   }
@@ -471,10 +471,10 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-  void writeCellData(unsigned int id, const CellDataType *data)
+  void writeCellData(std::size_t id, const CellDataType *data)
   {
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
-    int idShift = (m_writePartitionInfo ? 2 : 1);
+    auto idShift = (m_writePartitionInfo ? 2 : 1);
     idShift += m_writeExtraIntCellData;
     m_backend.writeCellData(m_meshTimeStep-1, id + idShift, data);
   }
@@ -484,7 +484,7 @@ public:
 	 *
 	 * @param id The number of the variable that should be written
 	 */
-  void writeVertexData(unsigned int id, const VertexDataType *data)
+  void writeVertexData(std::size_t id, const VertexDataType *data)
 	{
     SCOREP_USER_REGION("XDMFWriter_writeCellData", SCOREP_USER_REGION_TYPE_FUNCTION);
     // Filter duplicates if the vertex filter is enabled

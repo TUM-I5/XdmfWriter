@@ -397,8 +397,16 @@ public:
 						<< m_backend.format() << "\" Dimensions=\"" << m_totalSize[1] << " 3\">"
 						<< m_backend.vertexDataLocation(m_meshId-1, "geometry")
 						<< "</DataItem>" << std::endl
-					<< "    </Geometry>" << std::endl
-					<< "    <Time Value=\"" << time << "\"/>" << std::endl;
+					<< "    </Geometry>" << std::endl;
+			const auto oldFlags = m_xdmfFile.flags();
+			const auto oldPrecision = m_xdmfFile.precision();
+			m_xdmfFile << "    <Time Value=\""
+			           << std::fixed
+			           << std::setprecision(std::numeric_limits<double>::max_digits10)
+			           << time
+			           << "\"/>" << std::endl;
+			m_xdmfFile.flags(oldFlags);
+			m_xdmfFile.precision(oldPrecision);
 			if (m_writePartitionInfo) {
 				m_xdmfFile << "    <Attribute Name=\"partition\" Center=\"Cell\">" << std::endl
 						<< "     <DataItem  NumberType=\"Int\" Precision=\"4\" Format=\""
